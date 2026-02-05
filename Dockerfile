@@ -24,4 +24,4 @@ COPY --from=build /app/server/migrations ./migrations
 COPY package.json package-lock.json ./
 EXPOSE 3000
 VOLUME ["/data"]
-CMD ["node", "dist/server/index.js"]
+CMD ["node", "dist/server/server/src/index.js"]

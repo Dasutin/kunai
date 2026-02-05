@@ -11,7 +11,7 @@
     "build": "npm run build:client && npm run build:server",
     "build:client": "vite build --config client/vite.config.ts",
     "build:server": "tsc -p server/tsconfig.json",
-    "start": "node dist/server/index.js"
+    "start": "node dist/server/server/src/index.js"
   },
   "dependencies": {
     "better-sqlite3": "^9.4.5",
