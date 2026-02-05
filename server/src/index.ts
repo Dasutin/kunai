@@ -35,7 +35,8 @@ app.use(express.json());
 app.use(express.text({ type: ['text/xml', 'application/xml', 'text/plain'], limit: `${env.maxUploadMb}mb` }));
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const clientDist = path.resolve(__dirname, '../../dist/client');
+// When built, __dirname is dist/server/server/src; step up to reach dist/client
+const clientDist = path.resolve(__dirname, '../../../dist/client');
 
 const parseNumber = (val: any) => {
   const num = Number(val);
