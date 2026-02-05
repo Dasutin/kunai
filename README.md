@@ -11,6 +11,10 @@ Kunai is a clean, self-hosted RSS reader. Add your favorite feeds, browse in lis
 	```
 3) Open http://localhost:3000 and start adding feeds.
 
+### Volumes
+
+- `/data` — SQLite database and app data (mapped by default in docker compose)
+
 ## Features
 
 - Add and organize feeds into folders and tags

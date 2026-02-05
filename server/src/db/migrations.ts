@@ -9,6 +9,7 @@ const resolveMigrationsDir = () => {
   const candidates = [
     path.resolve(__dirname, '../../../migrations'), // runtime image: /app/migrations
     path.resolve(__dirname, '../../migrations'), // dev tsx: dist-adjacent
+    path.resolve(process.cwd(), 'migrations'), // runtime when migrations are copied to /app/migrations
     path.resolve(process.cwd(), 'server', 'migrations') // source run
   ];
   const found = candidates.find((p) => fs.existsSync(p));
