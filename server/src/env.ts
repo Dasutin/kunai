@@ -14,7 +14,7 @@ const contentFetchFlag = process.env.CONTENT_FETCH_ENABLED?.toLowerCase();
 export const env = {
   port: Number(process.env.PORT || 3000),
   dataDir: process.env.DATA_DIR || path.resolve(process.cwd(), 'data'),
-  refreshMinutes: numberFromEnv(process.env.REFRESH_INTERVAL_MINUTES, 10),
+  refreshMinutes: numberFromEnv(process.env.REFRESH_INTERVAL_MINUTES, 5),
   nodeEnv: process.env.NODE_ENV || 'development',
   // Default on; only disable if explicitly set to "false"
   contentFetchEnabled: contentFetchFlag === undefined ? true : contentFetchFlag === 'true',

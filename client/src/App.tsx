@@ -42,7 +42,7 @@ const App: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = usePersistedState('sidebarCollapsed', false);
   const [sidebarPinned, setSidebarPinned] = usePersistedState('sidebarPinned', true);
   const [sidebarPeek, setSidebarPeek] = useState(false);
-  const [savedItems, setSavedItems] = usePersistedState<Item[]>('savedItems', []);
+  const [savedItems, setSavedItems] = useState<Item[]>([]);
   const [savedView, setSavedView] = useState(false);
   const [search, setSearch] = useState('');
   const [items, setItems] = useState<Item[]>([]);
@@ -120,6 +120,61 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const reorderFoldersLocal = (ids: string[]) => {
+    setFolders((prev) => {
+      const map = new Map(prev.map((f) => [f.id, f]));
+      const ordered = ids.map((id, idx) => ({ ...map.get(id)!, position: idx + 1 })).filter(Boolean) as FolderWithUnread[];
+      const untouched = prev.filter((f) => !ids.includes(f.id)).map((f) => ({ ...f }));
+      return [...ordered, ...untouched];
+    });
+  };
+
+  const handleReorderFolders = async (ids: string[]) => {
+    reorderFoldersLocal(ids);
+    try {
+      await api.reorderFolders(ids);
+      const data = await api.getFolders();
+      setFolders(data);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to reorder folders');
+      loadFolders();
+    }
+  };
+
+  const reorderFeedsLocal = (folderId: string | null, ids: number[]) => {
+    setFeeds((prev) => {
+      const map = new Map(prev.map((f) => [f.id, f]));
+      const ordered = ids
+        .map((id, idx) => {
+          const f = map.get(id);
+          if (!f) return null;
+          return { ...f, folderId, position: idx + 1 } as FeedWithUnread;
+        })
+        .filter(Boolean) as FeedWithUnread[];
+      const others = prev.filter((f) => !ids.includes(f.id)).map((f) => ({ ...f } as FeedWithUnread));
+      const next = [...others, ...ordered];
+      const folderUnread = next.reduce<Record<string, number>>((acc, f) => {
+        if (f.folderId) acc[f.folderId] = (acc[f.folderId] || 0) + (f.unreadCount || 0);
+        return acc;
+      }, {});
+      setFolders((prevFolders) => prevFolders.map((fol) => ({ ...fol, unreadCount: folderUnread[fol.id] || 0 })));
+      return next;
+    });
+  };
+
+  const handleReorderFeeds = async (folderId: string | null, ids: number[]) => {
+    reorderFeedsLocal(folderId, ids);
+    try {
+      await api.reorderFeeds(ids, folderId);
+      const [feedsData, foldersData] = await Promise.all([api.getFeeds(), api.getFolders()]);
+      setFeeds(feedsData);
+      setFolders(foldersData);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to reorder feeds');
+      await Promise.all([loadFeeds(), loadFolders()]);
+    }
+  };
+
   const loadTags = useCallback(async () => {
     try {
       const data = await api.getTags();
@@ -137,6 +192,11 @@ const App: React.FC = () => {
       setError(err?.message || 'Failed to load settings');
     }
   }, []);
+
+  useEffect(() => {
+    const theme = settings?.theme || 'default';
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [settings]);
 
   const fetchItems = useCallback(
     async (opts?: { tagIds?: number[] }) => {
@@ -164,6 +224,7 @@ const App: React.FC = () => {
         // Ignore stale responses
         if (requestId === latestRequestId.current) {
           setItems(data.items);
+          setSavedItems(data.items.filter((it) => it.saved));
         }
       } catch (err: any) {
         if (requestId === latestRequestId.current) {
@@ -212,10 +273,23 @@ const App: React.FC = () => {
   };
 
   const handleToggleSaved = (item: Item) => {
+    const next = !item.saved;
+    setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, saved: next } : it)));
     setSavedItems((prev) => {
-      const exists = prev.find((it) => it.id === item.id);
-      if (exists) return prev.filter((it) => it.id !== item.id);
-      return [{ ...item }, ...prev];
+      if (next) return [{ ...item, saved: true }, ...prev];
+      return prev.filter((it) => it.id !== item.id);
+    });
+    api.saveItem(item.id, { saved: next }).catch(() => {
+      // revert on error
+      setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, saved: item.saved } : it)));
+      setSavedItems((prev) => {
+        if (item.saved) {
+          if (prev.find((p) => p.id === item.id)) return prev;
+          return [{ ...item, saved: true }, ...prev];
+        }
+        return prev.filter((p) => p.id !== item.id);
+      });
+      setError('Failed to update saved state');
     });
   };
 
@@ -236,7 +310,8 @@ const App: React.FC = () => {
     }
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = useCallback(async () => {
+    if (refreshing) return;
     setRefreshing(true);
     try {
       if (selectedFeedId) await api.refreshFeed(selectedFeedId);
@@ -248,7 +323,14 @@ const App: React.FC = () => {
     } finally {
       setRefreshing(false);
     }
-  };
+  }, [selectedFeedId, loadFeeds, loadFolders, fetchItems, refreshing]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!document.hidden) handleRefresh();
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [handleRefresh]);
 
   const handleAddFeed = async (url: string, title?: string) => {
     await api.addFeed({ url, title, folderId: selectedFolderId || undefined });
@@ -425,6 +507,8 @@ const App: React.FC = () => {
         onSelectFolder={handleSelectFolder}
         onOpenCreateFolder={() => setCreateFolderOpen(true)}
         onMoveFeed={handleMoveFeed}
+        onReorderFolders={handleReorderFolders}
+        onReorderFeeds={handleReorderFeeds}
         onSelectSaved={handleSelectSaved}
         savedCount={savedItems.length}
         savedView={savedView}

@@ -21,7 +21,7 @@ export const foldersRepo = {
           ) rsCnt ON rsCnt.feedId = fe.id
           GROUP BY fo.id
         ) uc ON uc.folderId = f.id
-        ORDER BY f.createdAt ASC
+        ORDER BY f.position ASC, f.createdAt ASC
       `)
       .all();
     return rows as any;
@@ -30,10 +30,13 @@ export const foldersRepo = {
   create(name: string, parentId: string | null) {
     const id = randomUUID();
     const now = new Date().toISOString();
-    db.prepare('INSERT INTO folders (id, name, parentId, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?)').run(
+    const maxPos = (db.prepare('SELECT COALESCE(MAX(position), 0) as maxPos FROM folders').get() as { maxPos: number }).maxPos || 0;
+    const position = maxPos + 1;
+    db.prepare('INSERT INTO folders (id, name, parentId, position, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?)').run(
       id,
       name,
       parentId,
+      position,
       now,
       now
     );
@@ -61,5 +64,13 @@ export const foldersRepo = {
     // Move contained feeds to root
     db.prepare('UPDATE feeds SET folderId = NULL WHERE folderId = ?').run(id);
     db.prepare('DELETE FROM folders WHERE id = ?').run(id);
+  },
+
+  reorder(folderIds: string[]) {
+    const stmt = db.prepare('UPDATE folders SET position = ? WHERE id = ?');
+    const tx = db.transaction(() => {
+      folderIds.forEach((id, idx) => stmt.run(idx + 1, id));
+    });
+    tx();
   }
 };

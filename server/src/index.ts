@@ -69,6 +69,14 @@ app.patch('/api/folders/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/api/folders/reorder', (req, res) => {
+  const schema = z.object({ ids: z.array(z.string().uuid()) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid payload', details: parsed.error.flatten() });
+  foldersRepo.reorder(parsed.data.ids);
+  res.json({ ok: true });
+});
+
 app.delete('/api/folders/:id', (req, res) => {
   foldersRepo.delete(req.params.id);
   res.status(204).end();
@@ -111,6 +119,14 @@ app.post('/api/feeds/move', (req, res) => {
   for (const fid of parsed.data.feedIds) {
     feedsRepo.update(fid, { folderId: parsed.data.folderId });
   }
+  res.json({ ok: true });
+});
+
+app.post('/api/feeds/reorder', (req, res) => {
+  const schema = z.object({ ids: z.array(z.number()), folderId: z.string().uuid().nullable() });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid payload', details: parsed.error.flatten() });
+  feedsRepo.reorder(parsed.data.ids, parsed.data.folderId ?? null);
   res.json({ ok: true });
 });
 
@@ -250,6 +266,18 @@ app.patch('/api/settings', (req, res) => {
   if (body.refreshMinutes && Number(body.refreshMinutes) > 0) {
     updateSchedulerInterval(Number(body.refreshMinutes));
   }
+  res.json({ ok: true });
+});
+
+// Save / unsave items
+app.post('/api/items/:id/save', (req, res) => {
+  const id = Number(req.params.id);
+  const schema = z.object({ saved: z.boolean() });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid payload', details: parsed.error.flatten() });
+  const existing = db.prepare('SELECT id FROM items WHERE id = ?').get(id) as { id: number } | undefined;
+  if (!existing) return res.status(404).json({ message: 'Item not found' });
+  itemsRepo.setSaved(id, parsed.data.saved);
   res.json({ ok: true });
 });
 

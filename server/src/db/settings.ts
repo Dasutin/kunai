@@ -22,12 +22,24 @@ export const settingsRepo = {
         case 'refreshMinutes':
           (result as any)[row.key] = Number(row.value) || env.refreshMinutes;
           break;
+        case 'articleRetention':
+          (result as any)[row.key] = ['1w', '1m', '1y', 'off'].includes(row.value) ? (row.value as any) : 'off';
+          break;
+        case 'theme':
+          (result as any)[row.key] = ['default', 'light', 'dark'].includes(row.value) ? (row.value as any) : 'default';
+          break;
         default:
           (result as any)[row.key] = row.value;
       }
     }
     if (result.refreshMinutes === undefined) {
       result.refreshMinutes = env.refreshMinutes;
+    }
+    if (!result.articleRetention) {
+      result.articleRetention = 'off';
+    }
+    if (!result.theme) {
+      result.theme = 'default';
     }
     return result;
   },

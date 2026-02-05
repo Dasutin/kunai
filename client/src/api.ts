@@ -52,6 +52,10 @@ export const api = {
     const res = await fetch(`/api/feeds/${id}`, { method: 'PATCH', headers: jsonHeaders, body: JSON.stringify(body) });
     return handle(res);
   },
+  async reorderFeeds(ids: number[], folderId: string | null) {
+    const res = await fetch('/api/feeds/reorder', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ ids, folderId }) });
+    return handle(res);
+  },
   async deleteFeed(id: number) {
     const res = await fetch(`/api/feeds/${id}`, { method: 'DELETE' });
     if (!res.ok && res.status !== 204) throw new Error('Failed to delete feed');
@@ -78,6 +82,10 @@ export const api = {
   },
   async markAllRead(body: MarkAllReadRequest) {
     const res = await fetch('/api/items/markAllRead', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(body) });
+    return handle(res);
+  },
+  async saveItem(id: number, body: { saved: boolean }) {
+    const res = await fetch(`/api/items/${id}/save`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(body) });
     return handle(res);
   },
   async updateItemTags(id: number, body: { add?: (number | string)[]; remove?: (number | string)[] }) {
@@ -128,5 +136,9 @@ export const api = {
   async deleteFolder(id: string) {
     const res = await fetch(`/api/folders/${id}`, { method: 'DELETE' });
     if (!res.ok && res.status !== 204) throw new Error('Failed to delete folder');
+  },
+  async reorderFolders(ids: string[]) {
+    const res = await fetch('/api/folders/reorder', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ ids }) });
+    return handle(res);
   }
 };

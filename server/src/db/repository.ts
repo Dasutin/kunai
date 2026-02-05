@@ -36,6 +36,9 @@ type ItemRow = {
   feedTitle: string;
   isRead: number | null;
   createdAt: string;
+  saved: number;
+  savedAt: string | null;
+  unsavedAt: string | null;
 };
 
 const toBool = (value: number | null) => value === 1;
@@ -54,16 +57,20 @@ export const feedsRepo = {
           WHERE i.feedId = f.id AND (rs.isRead IS NULL OR rs.isRead = 0)
         ) AS unreadCount
        FROM feeds f
-       ORDER BY f.createdAt DESC`
+       ORDER BY f.folderId IS NOT NULL, f.folderId, f.position ASC, f.title COLLATE NOCASE ASC`
     );
     return stmt.all();
   },
 
   create({ url, title }: FeedCreateRequest) {
     const now = new Date().toISOString();
+    const maxPosRow = db
+      .prepare('SELECT COALESCE(MAX(position), 0) as maxPos FROM feeds WHERE folderId IS NULL')
+      .get() as { maxPos: number };
+    const position = (maxPosRow?.maxPos || 0) + 1;
     const result = db
-      .prepare('INSERT INTO feeds (title, url, enabled, createdAt, updatedAt) VALUES (?, ?, 1, ?, ?)')
-      .run(title || url, url, now, now);
+      .prepare('INSERT INTO feeds (title, url, enabled, position, createdAt, updatedAt) VALUES (?, ?, 1, ?, ?, ?)')
+      .run(title || url, url, position, now, now);
     return result.lastInsertRowid as number;
   },
 
@@ -99,6 +106,14 @@ export const feedsRepo = {
 
   delete(id: number) {
     db.prepare('DELETE FROM feeds WHERE id = ?').run(id);
+  },
+
+  reorder(ids: number[], folderId: string | null) {
+    const stmt = db.prepare('UPDATE feeds SET position = ?, folderId = ? WHERE id = ?');
+    const tx = db.transaction(() => {
+      ids.forEach((id, idx) => stmt.run(idx + 1, folderId, id));
+    });
+    tx();
   },
 
   touchFetch(id: number, status: 'ok' | 'error', error: string | null) {
@@ -271,9 +286,18 @@ export const itemsRepo = {
       ...row,
       link: row.link || '#',
       isRead: toBool(row.isRead ?? 0),
+      saved: toBool(row.saved ?? 0),
       tags: tagMap[row.id] || []
     }));
     return { items, nextCursor };
+  },
+
+  setSaved(itemId: number, saved: boolean) {
+    if (saved) {
+      db.prepare("UPDATE items SET saved = 1, savedAt = datetime('now'), unsavedAt = NULL WHERE id = ?").run(itemId);
+    } else {
+      db.prepare("UPDATE items SET saved = 0, unsavedAt = datetime('now') WHERE id = ?").run(itemId);
+    }
   },
 
   markRead(itemId: number, isRead: boolean) {

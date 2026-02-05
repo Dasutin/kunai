@@ -2,6 +2,7 @@ export type Folder = {
   id: string;
   name: string;
   parentId: string | null;
+  position?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -13,6 +14,7 @@ export type Feed = {
   enabled: boolean;
   muted: boolean;
   folderId: string | null;
+  position?: number;
   createdAt: string;
   updatedAt: string;
   lastFetchedAt: string | null;
@@ -49,6 +51,9 @@ export type Item = {
   createdAt: string;
   feedTitle?: string;
   isRead?: boolean;
+  saved?: boolean;
+  savedAt?: string | null;
+  unsavedAt?: string | null;
   tags?: Tag[];
 };
 
@@ -87,6 +92,8 @@ export type Settings = Partial<{
   contentFetchEnabled: boolean;
   contentFetchMaxPerRefresh: number;
   refreshMinutes: number;
+  articleRetention: 'off' | '1w' | '1m' | '1y';
+  theme: 'default' | 'light' | 'dark';
 }>;
 
 export type ApiError = { message: string; details?: unknown };
