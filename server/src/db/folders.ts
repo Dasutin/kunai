@@ -1,6 +1,6 @@
 import { db } from './client.js';
 import { randomUUID } from 'crypto';
-import type { Folder } from '../../shared/types.js';
+import type { Folder } from '../../../shared/types.js';
 
 export const foldersRepo = {
   list(): Array<Folder & { unreadCount: number }> {

@@ -1,6 +1,6 @@
 import Parser from 'rss-parser';
 import { itemsRepo, feedsRepo } from '../db/repository.js';
-import type { Feed } from '../../shared/types.js';
+import type { Feed } from '../../../shared/types.js';
 import sanitizeHtml from 'sanitize-html';
 
 const parser = new Parser({
@@ -31,7 +31,7 @@ export const refreshFeed = async (feed: Feed) => {
   if (!feed.enabled) return;
   try {
     const parsed = await parser.parseURL(feed.url);
-    const items = (parsed.items || []).map((i) => ({
+    const items = (parsed.items || []).map((i: any) => ({
       guid: i.guid || i.id || i.link || null,
       title: i.title || 'Untitled',
       link: i.link || '#',

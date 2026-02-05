@@ -1,5 +1,5 @@
 import { db } from './client.js';
-import type { Settings } from '../../shared/types.js';
+import type { Settings } from '../../../shared/types.js';
 import { env } from '../env.js';
 
 export const settingsRepo = {

@@ -5,7 +5,7 @@ import type {
   ItemListResponse,
   ItemQuery,
   Tag
-} from '../../shared/types.js';
+} from '../../../shared/types.js';
 import sanitizeHtml from 'sanitize-html';
 import { tagsRepo } from './tags.js';
 
@@ -19,6 +19,23 @@ type NormalizedItem = {
   content: string | null;
   imageUrl: string | null;
   raw: string | null;
+};
+
+type ItemRow = {
+  id: number;
+  feedId: number;
+  guid: string | null;
+  title: string;
+  link: string | null;
+  publishedAt: string | null;
+  author: string | null;
+  snippet: string | null;
+  content: string | null;
+  imageUrl: string | null;
+  raw: string | null;
+  feedTitle: string;
+  isRead: number | null;
+  createdAt: string;
 };
 
 const toBool = (value: number | null) => value === 1;
@@ -225,7 +242,7 @@ export const itemsRepo = {
          ORDER BY ${unreadOrder} i.publishedAt ${orderDir}, i.id ${orderDir}
          LIMIT ?`
       )
-      .all(...params, limit + 1);
+      .all(...params, limit + 1) as ItemRow[];
 
     let nextCursor: string | null = null;
     if (rows.length > limit) {
@@ -243,7 +260,7 @@ export const itemsRepo = {
           `SELECT it.itemId, t.* FROM item_tags it JOIN tags t ON t.id = it.tagId WHERE it.itemId IN (${placeholders})`
         )
         .all(...itemIds) as Array<{ itemId: number } & Tag>;
-      tagMap = tagRows.reduce((acc, row) => {
+      tagMap = tagRows.reduce<Record<number, Tag[]>>((acc, row) => {
         acc[row.itemId] = acc[row.itemId] || [];
         acc[row.itemId].push({ id: row.id, name: row.name, createdAt: row.createdAt, updatedAt: row.updatedAt });
         return acc;
@@ -252,6 +269,7 @@ export const itemsRepo = {
 
     const items = rows.map((row) => ({
       ...row,
+      link: row.link || '#',
       isRead: toBool(row.isRead ?? 0),
       tags: tagMap[row.id] || []
     }));

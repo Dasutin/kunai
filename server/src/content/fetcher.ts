@@ -1,6 +1,7 @@
 import { JSDOM, VirtualConsole } from 'jsdom';
 import { Readability } from '@mozilla/readability';
 import sanitizeHtml from 'sanitize-html';
+import type { Attributes } from 'sanitize-html';
 
 export const fetchReadable = async (url: string): Promise<{ content: string | null }> => {
   const res = await fetch(url, { headers: { 'user-agent': 'kunai/1.0 (+https://example.com)' }, redirect: 'follow' });
@@ -13,7 +14,7 @@ export const fetchReadable = async (url: string): Promise<{ content: string | nu
   const dom = new JSDOM(html, { url, virtualConsole, pretendToBeVisual: true });
 
   // Remove style/link tags to avoid CSS parsing errors and keep article clean
-  dom.window.document.querySelectorAll('style, link[rel="stylesheet"]').forEach((node) => node.remove());
+  dom.window.document.querySelectorAll('style, link[rel="stylesheet"]').forEach((node: Element) => node.remove());
   const reader = new Readability(dom.window.document);
   const parsed = reader.parse();
   if (!parsed?.content) return { content: null };
@@ -29,7 +30,7 @@ export const fetchReadable = async (url: string): Promise<{ content: string | nu
     allowedSchemes: ['http', 'https'],
     allowedSchemesByTag: { img: ['http', 'https'] },
     transformTags: {
-      a: (tagName, attribs) => ({
+      a: (tagName: string, attribs: Attributes) => ({
         tagName,
         attribs: { ...attribs, rel: 'noreferrer noopener', target: '_blank' }
       })

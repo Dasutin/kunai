@@ -1,5 +1,5 @@
 import { db } from './client.js';
-import type { Tag } from '../../shared/types.js';
+import type { Tag } from '../../../shared/types.js';
 
 export const tagsRepo = {
   list(): Array<Tag & { usageCount: number }> {

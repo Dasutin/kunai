@@ -16,7 +16,8 @@ import type {
   MarkAllReadRequest,
   MarkReadRequest,
   ItemQuery,
-  Settings
+  Settings,
+  Feed
 } from '../../shared/types.js';
 import { z } from 'zod';
 import { foldersRepo } from './db/folders.js';
@@ -120,7 +121,7 @@ app.delete('/api/feeds/:id', (req, res) => {
 
 app.post('/api/feeds/:id/refresh', async (req, res) => {
   const id = Number(req.params.id);
-  const feed = feedsRepo.findById(id);
+  const feed = feedsRepo.findById(id) as Feed | undefined;
   if (!feed) return res.status(404).json({ message: 'Feed not found' });
   try {
     await refreshFeed(feed);
