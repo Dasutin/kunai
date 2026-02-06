@@ -36,7 +36,11 @@ export const ItemMagazine: React.FC<Props> = ({ items, onOpen, onToggleRead, sav
           <div className="mag-feed muted">{item.feedTitle}</div>
           <div className="mag-snippet muted">{item.snippet || item.content || ''}</div>
           <div className="mag-footer muted">
-            <span>{timeAgo(item.publishedAt)}</span>
+            <span className="mag-meta-footer">
+              <span className="mag-meta-feed">{item.feedTitle}</span>
+              <span>·</span>
+              <span>{timeAgo(item.publishedAt)}</span>
+            </span>
             <div className="mag-actions">
               <button
                 className="btn-ghost icon-btn"

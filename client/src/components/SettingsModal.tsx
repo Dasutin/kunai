@@ -112,9 +112,10 @@ export const SettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) =>
               </label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span>Default view:</span>
-                <select value={settings.defaultViewMode || 'list'} onChange={(e) => save({ defaultViewMode: e.target.value as 'list' | 'card' })}>
+                <select value={settings.defaultViewMode || 'list'} onChange={(e) => save({ defaultViewMode: e.target.value as 'list' | 'card' | 'magazine' })}>
                   <option value="list">List</option>
                   <option value="card">Card</option>
+                  <option value="magazine">Magazine</option>
                 </select>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

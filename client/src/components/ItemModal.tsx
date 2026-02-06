@@ -117,7 +117,6 @@ export const ItemModal: React.FC<Props> = ({ item, onClose, onUpdateTags, onFetc
           ) : (
             <p className="snippet">{item.snippet || 'No snippet available.'}</p>
           )}
-          <div className="modal-divider" />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
             {item.tags?.map((tag) => (
               <span key={`${item.id}-${tag.id}`} className="tag-pill">

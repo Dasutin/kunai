@@ -14,7 +14,9 @@ export const settingsRepo = {
           (result as any)[row.key] = row.value === 'true';
           break;
         case 'defaultViewMode':
-          (result as any)[row.key] = row.value === 'card' ? 'card' : 'list';
+          (result as any)[row.key] = ['list', 'card', 'magazine'].includes(row.value)
+            ? (row.value as any)
+            : 'list';
           break;
         case 'contentFetchMaxPerRefresh':
           (result as any)[row.key] = Number(row.value) || 0;

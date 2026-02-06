@@ -87,7 +87,7 @@ export type MarkAllReadRequest = {
 
 export type Settings = Partial<{
   markReadOnOpen: boolean;
-  defaultViewMode: 'list' | 'card';
+  defaultViewMode: 'list' | 'card' | 'magazine';
   unreadFirstDefault: boolean;
   contentFetchEnabled: boolean;
   contentFetchMaxPerRefresh: number;
