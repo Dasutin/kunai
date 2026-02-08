@@ -27,21 +27,44 @@ const pickImage = (item: any): string | null => {
   return enclosureUrl || mediaContentUrl || mediaThumbUrl || ogImage || htmlImage || null;
 };
 
+const normalizeLink = (raw?: string | null): string | null => {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    // strip common tracking params to keep a stable link key
+    const params = Array.from(url.searchParams.keys());
+    for (const key of params) {
+      const lower = key.toLowerCase();
+      if (lower.startsWith('utm_') || lower === 'gclid' || lower === 'fbclid' || lower.startsWith('mc_')) {
+        url.searchParams.delete(key);
+      }
+    }
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return raw;
+  }
+};
+
 export const refreshFeed = async (feed: Feed) => {
   if (!feed.enabled) return;
   try {
     const parsed = await parser.parseURL(feed.url);
-    const items = (parsed.items || []).map((i: any) => ({
-      guid: i.guid || i.id || i.link || null,
-      title: i.title || 'Untitled',
-      link: i.link || '#',
-      publishedAt: i.isoDate || i.pubDate || null,
-      author: i.creator || i.author || null,
-      snippet: safeText(i.summary || i.contentSnippet || i.content || i.description || null),
-      content: safeText(i.content || i['content:encoded'] || i.description || null),
-      imageUrl: pickImage(i),
-      raw: JSON.stringify(i)
-    }));
+    const items = (parsed.items || []).map((i: any) => {
+      const normalizedLink = normalizeLink(i.link);
+      const dedupGuid = i.guid || i.id || normalizedLink || i.link || null;
+      return {
+        guid: dedupGuid,
+        title: i.title || 'Untitled',
+        link: normalizedLink || i.link || '#',
+        publishedAt: i.isoDate || i.pubDate || null,
+        author: i.creator || i.author || null,
+        snippet: safeText(i.summary || i.contentSnippet || i.content || i.description || null),
+        content: safeText(i.content || i['content:encoded'] || i.description || null),
+        imageUrl: pickImage(i),
+        raw: JSON.stringify(i)
+      };
+    });
 
     itemsRepo.upsertItems(feed.id, items);
     feedsRepo.touchFetch(feed.id, 'ok', null);

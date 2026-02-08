@@ -22,9 +22,11 @@ type Props = {
   onSelectFeed: (id: number | null) => void;
   onSelectFolder: (id: string | null) => void;
   onOpenCreateFolder: () => void;
+  onOpenSettings: () => void;
   onMoveFeed: (feedId: number, folderId: string | null) => void;
   onReorderFolders: (orderedIds: string[]) => void;
   onReorderFeeds: (folderId: string | null, orderedIds: number[]) => void;
+  onDeleteFolder: (folderId: string) => void;
   onSelectSaved: () => void;
   savedCount: number;
   savedView: boolean;
@@ -34,6 +36,7 @@ type Props = {
   peek: boolean;
   onClosePeek: () => void;
   onPeek: () => void;
+  isMobile?: boolean;
 };
 
 export const Sidebar: React.FC<Props> = ({
@@ -44,9 +47,11 @@ export const Sidebar: React.FC<Props> = ({
   onSelectFeed,
   onSelectFolder,
   onOpenCreateFolder,
+  onOpenSettings,
   onMoveFeed,
   onReorderFolders,
   onReorderFeeds = () => {},
+  onDeleteFolder,
   onSelectSaved,
   savedCount,
   savedView,
@@ -55,7 +60,8 @@ export const Sidebar: React.FC<Props> = ({
   pinned,
   peek,
   onClosePeek,
-  onPeek
+  onPeek,
+  isMobile = false
 }) => {
   const unreadTotal = feeds.reduce((acc, f) => acc + (f.unreadCount || 0), 0);
   const [feedsOpen, setFeedsOpen] = useState(false);
@@ -151,6 +157,16 @@ export const Sidebar: React.FC<Props> = ({
       <header>
         {!collapsed && <span>Feeds</span>}
         <div className="sidebar-actions">
+          {isMobile && (
+            <button
+              className="btn-ghost icon-btn settings-btn"
+              onClick={onOpenSettings}
+              aria-label="Settings"
+              title="Settings"
+            >
+              <span className="material-icons">settings</span>
+            </button>
+          )}
           <button
             className="btn-ghost icon-btn"
             onClick={onOpenCreateFolder}
@@ -180,7 +196,10 @@ export const Sidebar: React.FC<Props> = ({
                 if (dragFolderId !== null) handleFolderDrop(null);
               }}
             >
-              <div className="title">Newsfeed</div>
+              <div className="title">
+                <span className="material-icons tree-icon">rss_feed</span>
+                Newsfeed
+              </div>
               <span className="badge">{unreadTotal}</span>
             </div>
             <div
@@ -227,8 +246,8 @@ export const Sidebar: React.FC<Props> = ({
                       >
                         <div className="title">
                           <button
-                            className="btn-ghost icon-btn"
-                            style={{ padding: 4, width: 28, height: 28, marginRight: 6 }}
+                            className="icon-btn folder-toggle-btn"
+                            style={{ padding: 4, width: 28, height: 28, marginRight: 2 }}
                             aria-label={collapsedFolders.has(folder.id) ? 'Expand folder' : 'Collapse folder'}
                             onClick={(e) => {
                               e.stopPropagation();
@@ -243,9 +262,20 @@ export const Sidebar: React.FC<Props> = ({
                             <span className="material-icons" style={{ fontSize: 16 }}>{collapsedFolders.has(folder.id) ? 'chevron_right' : 'expand_more'}</span>
                           </button>
                           <span className="material-icons tree-icon">folder</span>
-                          {folder.name}
+                          <span className="folder-name">{folder.name}</span>
                         </div>
-                        <span className="badge">{folder.unreadCount}</span>
+                        <div className="folder-count">
+                          <span className="badge">{folder.unreadCount}</span>
+                          <button
+                            className="btn-ghost icon-btn folder-trash-btn"
+                            aria-label={`Delete folder ${folder.name}`}
+                            title="Delete folder"
+                            onClick={(e) => { e.stopPropagation(); onDeleteFolder(folder.id); }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                          >
+                            <span className="material-icons">delete</span>
+                          </button>
+                        </div>
                       </div>
                       {!collapsedFolders.has(folder.id) && (
                         <div className="tree-children">
@@ -344,7 +374,10 @@ export const Sidebar: React.FC<Props> = ({
           {showFeedList && (
             <div className={clsx('feed-list', 'collapsed-flyout')}>
               <div className="feed-row" onClick={() => { onSelectFeed(null); onSelectFolder(null); closeFlyout(); }}>
-                <div className="title">Newsfeed</div>
+                <div className="title">
+                  <span className="material-icons tree-icon">rss_feed</span>
+                  Newsfeed
+                </div>
                 <span className="badge">{unreadTotal}</span>
                 <div className="meta">All sources</div>
               </div>
@@ -377,7 +410,18 @@ export const Sidebar: React.FC<Props> = ({
                               <span className="material-icons tree-icon">folder</span>
                               {folder.name}
                             </div>
-                            <span className="badge">{folder.unreadCount}</span>
+                            <div className="folder-count">
+                              <span className="badge">{folder.unreadCount}</span>
+                              <button
+                                className="btn-ghost icon-btn folder-trash-btn"
+                                aria-label={`Delete folder ${folder.name}`}
+                                title="Delete folder"
+                                onClick={(e) => { e.stopPropagation(); onDeleteFolder(folder.id); closeFlyout(); }}
+                                onMouseDown={(e) => e.stopPropagation()}
+                              >
+                                <span className="material-icons">delete</span>
+                              </button>
+                            </div>
                           </div>
                           <div className="tree-children">
                             {folderFeeds.map((feed) => (

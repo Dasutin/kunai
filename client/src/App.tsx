@@ -13,8 +13,29 @@ import { SettingsModal } from './components/SettingsModal';
 import { MiniSidebar } from './components/MiniSidebar';
 import clsx from 'clsx';
 import { CreateFolderModal } from './components/CreateFolderModal';
+import { DeleteFolderModal } from './components/DeleteFolderModal';
 
 type FolderWithUnread = Folder & { unreadCount: number };
+
+const EMPTY_QUOTES = [
+  "📜 All scrolls read.",
+  "🥷 The dojo is quiet. Too quiet.",
+  "🔪 Nothing left to slice.",
+  "🌑 No news. Only shadows.",
+  "🏆 All headlines eliminated. Flawless victory.",
+  "⚔️ The RSS has been slain.",
+  "🗡️ Your blade is sharp. The feed is empty.",
+  "⚡ No unread news. Ninja speed achieved.",
+  "💨 You blinked. The news is gone.",
+  "⏱️ Feed cleared in under 3 seconds. Respect.",
+  "🎯 Nothing survives the kunai scroll.",
+  "🤫 RSS Zero. Absolute silence.",
+  "💣 All caught up. Time to disappear in a smoke bomb.",
+  "😨 The feed fears you.",
+  "🏃‍♂️ You read so hard the news fled.",
+  "🌀 This silence cost three shurikens.",
+  "⚡ You struck the news before it loaded."
+];
 
 const scopeLabel = (selectedFeed: FeedWithUnread | null, selectedFolderId: string | null, folders: FolderWithUnread[], savedView: boolean) => {
   if (savedView) return 'Saved';
@@ -52,6 +73,8 @@ const App: React.FC = () => {
   const [addingFeed, setAddingFeed] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [folderToDelete, setFolderToDelete] = useState<{ folder: FolderWithUnread; feedCount: number } | null>(null);
+  const [deletingFolder, setDeletingFolder] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -61,6 +84,7 @@ const App: React.FC = () => {
   const [headerCondensed, setHeaderCondensed] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [emptyQuote, setEmptyQuote] = useState('');
   const latestRequestId = useRef(0);
 
   const displayItems = useMemo(() => {
@@ -76,6 +100,21 @@ const App: React.FC = () => {
   const unreadCount = useMemo(() => displayItems.filter((it) => !it.isRead).length, [displayItems]);
 
   const selectedFeed = useMemo(() => feeds.find((f) => f.id === selectedFeedId) || null, [feeds, selectedFeedId]);
+
+  const folderFeedCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    feeds.forEach((f) => {
+      if (f.folderId) counts[f.folderId] = (counts[f.folderId] || 0) + 1;
+    });
+    return counts;
+  }, [feeds]);
+
+  useEffect(() => {
+    if (displayItems.length === 0) {
+      const next = EMPTY_QUOTES[Math.floor(Math.random() * EMPTY_QUOTES.length)];
+      setEmptyQuote(next);
+    }
+  }, [displayItems.length]);
 
   useEffect(() => {
     const totalUnread = feeds.reduce((sum, f) => sum + (f.unreadCount || 0), 0);
@@ -460,6 +499,31 @@ const App: React.FC = () => {
     await loadFolders();
   };
 
+  const handleRequestDeleteFolder = (folderId: string) => {
+    const folder = folders.find((f) => f.id === folderId);
+    if (!folder) return;
+    const feedCount = folderFeedCounts[folderId] || 0;
+    setFolderToDelete({ folder, feedCount });
+    setMobileSidebarOpen(false);
+  };
+
+  const handleConfirmDeleteFolder = async () => {
+    if (!folderToDelete) return;
+    setDeletingFolder(true);
+    try {
+      await api.deleteFolder(folderToDelete.folder.id);
+      if (selectedFolderId === folderToDelete.folder.id) {
+        setSelectedFolderId(null);
+      }
+      await Promise.all([loadFolders(), loadFeeds()]);
+      setFolderToDelete(null);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to delete folder');
+    } finally {
+      setDeletingFolder(false);
+    }
+  };
+
   const handleMoveFeed = async (feedId: number, folderId: string | null) => {
     await api.moveFeeds([feedId], folderId);
     await Promise.all([loadFeeds(), loadFolders()]);
@@ -506,9 +570,11 @@ const App: React.FC = () => {
         onSelectFeed={handleSelectFeed}
         onSelectFolder={handleSelectFolder}
         onOpenCreateFolder={() => setCreateFolderOpen(true)}
+        onOpenSettings={() => { setSettingsOpen(true); setMobileSidebarOpen(false); }}
         onMoveFeed={handleMoveFeed}
         onReorderFolders={handleReorderFolders}
         onReorderFeeds={handleReorderFeeds}
+        onDeleteFolder={handleRequestDeleteFolder}
         onSelectSaved={handleSelectSaved}
         savedCount={savedItems.length}
         savedView={savedView}
@@ -518,6 +584,7 @@ const App: React.FC = () => {
         peek={sidebarPeek}
         onClosePeek={() => setSidebarPeek(false)}
         onPeek={handleSidebarPeekHover}
+        isMobile={isMobile}
       />
       {isMobile && mobileSidebarOpen && <div className="sidebar-backdrop" onClick={() => setMobileSidebarOpen(false)} />}
       <main className="main">
@@ -567,35 +634,42 @@ const App: React.FC = () => {
 
         {error && <div className="muted" style={{ color: 'var(--danger)' }}>{error}</div>}
 
-        {viewMode === 'list' && (
-          <ItemList
-            items={displayItems}
-            expandedId={expandedId}
-            onExpand={handleExpand}
-            onToggleRead={handleToggleRead}
-            onOpenModal={handleOpenModal}
-            onUpdateTags={handleUpdateTags}
-            savedIds={savedIds}
-            onToggleSave={handleToggleSaved}
-          />
+        {displayItems.length === 0 ? (
+          <div className="empty-state">{emptyQuote || "You've read everything"}</div>
+        ) : (
+          <>
+            {viewMode === 'list' && (
+              <ItemList
+                items={displayItems}
+                expandedId={expandedId}
+                onExpand={handleExpand}
+                onToggleRead={handleToggleRead}
+                onOpenModal={handleOpenModal}
+                onUpdateTags={handleUpdateTags}
+                savedIds={savedIds}
+                onToggleSave={handleToggleSaved}
+              />
+            )}
+            {viewMode === 'card' && (
+              <ItemGrid
+                items={displayItems}
+                onOpen={handleOpenModal}
+                onToggleRead={handleToggleRead}
+                savedIds={savedIds}
+                onToggleSave={handleToggleSaved}
+              />
+            )}
+            {viewMode === 'magazine' && (
+              <ItemMagazine
+                items={displayItems}
+                onOpen={handleOpenModal}
+                onToggleRead={handleToggleRead}
+                savedIds={savedIds}
+                onToggleSave={handleToggleSaved}
+              />
+            )}
+          </>
         )}
-        {viewMode === 'card' && (
-          <ItemGrid items={displayItems} onOpen={handleOpenModal} onToggleRead={handleToggleRead} savedIds={savedIds} onToggleSave={handleToggleSaved} />
-        )}
-        {viewMode === 'magazine' && (
-          <ItemMagazine
-            items={displayItems}
-            onOpen={handleOpenModal}
-            onToggleRead={handleToggleRead}
-            savedIds={savedIds}
-            onToggleSave={handleToggleSaved}
-          />
-        )}
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <span className="muted">{displayItems.length} items loaded</span>
-          {refreshing && <span className="muted">Refreshing…</span>}
-        </div>
       </main>
 
       {modalItem && (
@@ -613,6 +687,18 @@ const App: React.FC = () => {
       )}
       {addingFeed && <AddFeedModal onSubmit={handleAddFeed} onClose={() => setAddingFeed(false)} />}
       {createFolderOpen && <CreateFolderModal onSubmit={handleCreateFolder} onClose={() => setCreateFolderOpen(false)} />}
+      {folderToDelete && (
+        <DeleteFolderModal
+          folderName={folderToDelete.folder.name}
+          feedCount={folderToDelete.feedCount}
+          loading={deletingFolder}
+          onConfirm={handleConfirmDeleteFolder}
+          onClose={() => {
+            if (deletingFolder) return;
+            setFolderToDelete(null);
+          }}
+        />
+      )}
       {settingsOpen && <SettingsModal onClose={() => { setSettingsOpen(false); loadSettings(); }} />}
     </div>
   );

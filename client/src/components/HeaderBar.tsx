@@ -67,7 +67,12 @@ export const HeaderBar: React.FC<Props> = ({
 
       <div className="header-row">
         {isMobile && (
-          <button className="btn-ghost icon-btn mobile-menu-btn" onClick={onToggleSidebar} title="Toggle menu">
+          <button
+            className="btn-ghost icon-btn mobile-menu-btn"
+            style={{ border: 'none', boxShadow: 'none', background: 'transparent' }}
+            onClick={onToggleSidebar}
+            title="Toggle menu"
+          >
             <span className="material-icons">menu</span>
           </button>
         )}
