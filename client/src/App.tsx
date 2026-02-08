@@ -336,14 +336,14 @@ const App: React.FC = () => {
     if (savedView) {
       setSavedItems((prev) => prev.map((it) => ({ ...it, isRead: true })));
       setItems((prev) => prev.map((it) => ({ ...it, isRead: true })));
+      await handleRefresh();
       return;
     }
     try {
       const scope = selectedFeedId ? 'feed' : selectedFolderId ? 'folder' : 'newsfeed';
       await api.markAllRead({ scope, feedId: selectedFeedId || undefined, folderId: selectedFolderId || undefined });
       setItems((prev) => prev.map((it) => ({ ...it, isRead: true })));
-      loadFeeds();
-      loadFolders();
+      await handleRefresh();
     } catch (err: any) {
       setError(err?.message || 'Failed to mark all read');
     }
