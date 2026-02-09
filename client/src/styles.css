@@ -1079,6 +1079,14 @@ select option {
   margin: 0;
 }
 
+.article-body iframe {
+  width: 100%;
+  max-width: 100%;
+  min-height: 260px;
+  border: none;
+  border-radius: 12px;
+}
+
 @media (max-width: 900px) {
   .app-shell { grid-template-columns: 1fr; }
   .app-shell.sidebar-collapsed { grid-template-columns: 1fr; }

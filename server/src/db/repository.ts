@@ -45,7 +45,52 @@ const toBool = (value: number | null) => value === 1;
 
 const stripHtml = (input: string | null | undefined) => {
   if (!input) return null;
-  return sanitizeHtml(input, { allowedTags: [], allowedAttributes: {} });
+  return sanitizeHtml(input, {
+    allowedTags: [
+      'p',
+      'br',
+      'strong',
+      'em',
+      'b',
+      'i',
+      'u',
+      'ul',
+      'ol',
+      'li',
+      'blockquote',
+      'a',
+      'code',
+      'pre',
+      'img',
+      'figure',
+      'figcaption',
+      'span',
+      'div',
+      'iframe'
+    ],
+    allowedAttributes: {
+      a: ['href', 'name', 'target', 'rel'],
+      img: ['src', 'alt', 'title', 'width', 'height', 'loading'],
+      iframe: ['src', 'allow', 'allowfullscreen', 'frameborder', 'scrolling', 'title', 'referrerpolicy'],
+      '*': ['class']
+    },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowedIframeHostnames: [
+      'www.youtube.com',
+      'youtube.com',
+      'www.youtube-nocookie.com',
+      'youtube-nocookie.com',
+      'youtu.be',
+      'platform.twitter.com',
+      'twitframe.com',
+      'x.com',
+      'www.x.com',
+      'bsky.app',
+      'www.bsky.app',
+      'embed.bsky.app',
+      'player.vimeo.com'
+    ]
+  });
 };
 
 export const feedsRepo = {
