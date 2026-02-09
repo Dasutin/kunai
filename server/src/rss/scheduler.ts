@@ -10,7 +10,8 @@ export const refreshAllFeeds = async () => {
     try {
       await refreshFeed(feed);
     } catch (err) {
-      console.error(`Failed to refresh feed ${feed.id}:`, err);
+      const name = feed.title || feed.url || `id ${feed.id}`;
+      console.error(`Failed to refresh feed "${name}" (id ${feed.id}):`, err);
     }
   }
 };

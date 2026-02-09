@@ -15,6 +15,8 @@ type Props = {
   condensed: boolean;
   isMobile: boolean;
   onToggleSidebar: () => void;
+  isSettings: boolean;
+  onBackFromSettings?: () => void;
 };
 
 export const HeaderBar: React.FC<Props> = ({
@@ -30,7 +32,9 @@ export const HeaderBar: React.FC<Props> = ({
   scopeLabel,
   condensed,
   isMobile,
-  onToggleSidebar
+  onToggleSidebar,
+  isSettings,
+  onBackFromSettings
 }) => {
   const [openMenu, setOpenMenu] = useState<'filter' | 'view' | null>(null);
   const filterRef = useRef<HTMLDivElement | null>(null);
@@ -56,6 +60,25 @@ export const HeaderBar: React.FC<Props> = ({
     onViewChange(mode);
     setOpenMenu(null);
   };
+
+  if (isSettings) {
+    return (
+      <div className={clsx('header', 'settings-header-bar', condensed && 'header-collapsed')}>
+        <div className="header-row settings-header-row">
+          <div>
+            <div className="header-title">Settings</div>
+            <div className="settings-header-sub">Manage preferences and imports</div>
+          </div>
+          <div className="header-actions">
+            <button className="btn-ghost" onClick={onBackFromSettings}>
+              <span className="material-icons" style={{ verticalAlign: 'middle', marginRight: 4 }}>arrow_back</span>
+              Back to feeds
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={clsx('header', condensed && 'header-collapsed')}>

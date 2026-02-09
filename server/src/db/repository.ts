@@ -230,28 +230,54 @@ const applyCursor = (
 
 export const itemsRepo = {
   upsertItems(feedId: number, items: NormalizedItem[]) {
+    const toText = (val: any | null | undefined, fallback: string | null = null) => {
+      if (val === null || val === undefined) return fallback;
+      try {
+        return String(val);
+      } catch {
+        return fallback;
+      }
+    };
+
+    const rows = (items || []).filter(Boolean).map((row) => ({
+      guid: toText(row?.guid, null),
+      title: toText(row?.title, 'Untitled') || 'Untitled',
+      link: toText(row?.link, '#') || '#',
+      publishedAt: toText(row?.publishedAt, null),
+      author: toText(row?.author, null),
+      snippet: toText(row?.snippet, null),
+      content: toText(row?.content, null),
+      imageUrl: toText(row?.imageUrl, null),
+      raw: row?.raw ?? null
+    }));
+
     const stmt = db.prepare(
       `INSERT OR IGNORE INTO items
         (feedId, guid, title, link, publishedAt, author, snippet, content, imageUrl, raw)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
-    const insertMany = db.transaction((rows: any[]) => {
-      for (const row of rows) {
-        stmt.run(
-          feedId,
-          row.guid,
-          row.title,
-          row.link,
-          row.publishedAt,
-          row.author,
-          stripHtml(row.snippet),
-          stripHtml(row.content),
-          row.imageUrl,
-          row.raw
-        );
+    const insertMany = db.transaction((payload: typeof rows) => {
+      for (const row of payload) {
+        try {
+          stmt.run(
+            feedId,
+            row.guid,
+            row.title,
+            row.link,
+            row.publishedAt,
+            row.author,
+            stripHtml(row.snippet),
+            stripHtml(row.content),
+            row.imageUrl,
+            row.raw
+          );
+        } catch (err) {
+          console.error('Failed to insert item row', { feedId, row });
+          throw err;
+        }
       }
     });
-    insertMany(items);
+    insertMany(rows);
   },
 
   list(query: ItemQuery): ItemListResponse {

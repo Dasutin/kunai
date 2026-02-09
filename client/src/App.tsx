@@ -9,7 +9,7 @@ import { ItemGrid } from './components/ItemGrid';
 import { ItemMagazine } from './components/ItemMagazine';
 import { ItemModal } from './components/ItemModal';
 import { AddFeedModal } from './components/AddFeedModal';
-import { SettingsModal } from './components/SettingsModal';
+import { SettingsPage } from './components/SettingsPage';
 import { MiniSidebar } from './components/MiniSidebar';
 import clsx from 'clsx';
 import { CreateFolderModal } from './components/CreateFolderModal';
@@ -71,7 +71,7 @@ const App: React.FC = () => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [modalItem, setModalItem] = useState<Item | null>(null);
   const [addingFeed, setAddingFeed] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState(false);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<{ folder: FolderWithUnread; feedCount: number } | null>(null);
   const [deletingFolder, setDeletingFolder] = useState(false);
@@ -144,7 +144,9 @@ const App: React.FC = () => {
   const loadFeeds = useCallback(async () => {
     try {
       const data = await api.getFeeds();
-      setFeeds(data);
+      const enabledFeeds = data.filter((f) => f.enabled !== false);
+      setFeeds(enabledFeeds);
+      setSelectedFeedId((prev) => (prev && !enabledFeeds.find((f) => f.id === prev) ? null : prev));
     } catch (err: any) {
       setError(err?.message || 'Failed to load feeds');
     }
@@ -293,9 +295,10 @@ const App: React.FC = () => {
   }, [settings, appliedDefaults, setViewMode, setUnreadFirst]);
 
   useEffect(() => {
+    if (settingsView) return;
     fetchItems();
     setExpandedId(null);
-  }, [selectedFeedId, selectedFolderId, unreadOnly, sort, search, searchMode, unreadFirst, selectedTagIds, mutedIncluded, fetchItems]);
+  }, [selectedFeedId, selectedFolderId, unreadOnly, sort, search, searchMode, unreadFirst, selectedTagIds, mutedIncluded, fetchItems, settingsView]);
 
   const handleToggleRead = async (item: Item, next: boolean) => {
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, isRead: next } : it)));
@@ -534,6 +537,35 @@ const App: React.FC = () => {
     if (!sidebarPinned) setSidebarPeek(true);
   };
 
+  const openSettings = () => {
+    setSettingsView(true);
+    setMobileSidebarOpen(false);
+  };
+
+  const closeSettings = async () => {
+    if (!settingsView) return;
+    setSettingsView(false);
+    setMobileSidebarOpen(false);
+    await Promise.all([loadFeeds(), loadFolders(), loadTags()]);
+    fetchItems();
+  };
+
+  const goHome = () => {
+    setSavedView(false);
+    setSelectedFeedId(null);
+    setSelectedFolderId(null);
+    closeSettings();
+    setMobileSidebarOpen(false);
+  };
+
+  const goSaved = () => {
+    setSavedView(true);
+    setSelectedFeedId(null);
+    setSelectedFolderId(null);
+    closeSettings();
+    setMobileSidebarOpen(false);
+  };
+
   return (
     <div className={clsx(
       'app-shell',
@@ -541,12 +573,13 @@ const App: React.FC = () => {
       isMobile && 'is-mobile',
       isMobile && mobileSidebarOpen && 'sidebar-open',
       !sidebarPinned && !isMobile && 'sidebar-unpinned',
-      sidebarPeek && 'sidebar-peek'
+      sidebarPeek && 'sidebar-peek',
+      settingsView && 'settings-view'
     )}>
       <MiniSidebar
-        onSelectHome={() => { handleSelectFeed(null); handleSelectFolder(null); setMobileSidebarOpen(false); }}
-        onSelectSaved={handleSelectSaved}
-        onSettings={() => setSettingsOpen(true)}
+        onSelectHome={goHome}
+        onSelectSaved={goSaved}
+        onSettings={openSettings}
         onAddFeed={() => setAddingFeed(true)}
         isMobile={isMobile}
         onToggleContext={() => setMobileSidebarOpen((prev) => !prev)}
@@ -562,30 +595,32 @@ const App: React.FC = () => {
         onPeekStart={() => setSidebarPeek(true)}
         onPeekEnd={() => setSidebarPeek(false)}
       />
-      <Sidebar
-        feeds={feeds}
-        folders={folders}
-        selectedFeedId={selectedFeedId}
-        selectedFolderId={selectedFolderId}
-        onSelectFeed={handleSelectFeed}
-        onSelectFolder={handleSelectFolder}
-        onOpenCreateFolder={() => setCreateFolderOpen(true)}
-        onOpenSettings={() => { setSettingsOpen(true); setMobileSidebarOpen(false); }}
-        onMoveFeed={handleMoveFeed}
-        onReorderFolders={handleReorderFolders}
-        onReorderFeeds={handleReorderFeeds}
-        onDeleteFolder={handleRequestDeleteFolder}
-        onSelectSaved={handleSelectSaved}
-        savedCount={savedItems.length}
-        savedView={savedView}
-        collapsed={false}
-        onToggleCollapse={() => {}}
-        pinned={sidebarPinned}
-        peek={sidebarPeek}
-        onClosePeek={() => setSidebarPeek(false)}
-        onPeek={handleSidebarPeekHover}
-        isMobile={isMobile}
-      />
+      {!settingsView && (
+        <Sidebar
+          feeds={feeds}
+          folders={folders}
+          selectedFeedId={selectedFeedId}
+          selectedFolderId={selectedFolderId}
+          onSelectFeed={handleSelectFeed}
+          onSelectFolder={handleSelectFolder}
+          onOpenCreateFolder={() => setCreateFolderOpen(true)}
+          onOpenSettings={openSettings}
+          onMoveFeed={handleMoveFeed}
+          onReorderFolders={handleReorderFolders}
+          onReorderFeeds={handleReorderFeeds}
+          onDeleteFolder={handleRequestDeleteFolder}
+          onSelectSaved={goSaved}
+          savedCount={savedItems.length}
+          savedView={savedView}
+          collapsed={false}
+          onToggleCollapse={() => {}}
+          pinned={sidebarPinned}
+          peek={sidebarPeek}
+          onClosePeek={() => setSidebarPeek(false)}
+          onPeek={handleSidebarPeekHover}
+          isMobile={isMobile}
+        />
+      )}
       {isMobile && mobileSidebarOpen && <div className="sidebar-backdrop" onClick={() => setMobileSidebarOpen(false)} />}
       <main className="main">
         <HeaderBar
@@ -598,7 +633,7 @@ const App: React.FC = () => {
           onSearch={setSearch}
           onRefresh={handleRefresh}
           onMarkAllRead={handleMarkAll}
-          scopeLabel={scopeLabel(selectedFeed, selectedFolderId, folders, savedView)}
+          scopeLabel={settingsView ? 'Settings' : scopeLabel(selectedFeed, selectedFolderId, folders, savedView)}
           condensed={headerCondensed}
           isMobile={isMobile}
           onToggleSidebar={() => {
@@ -609,64 +644,74 @@ const App: React.FC = () => {
               setMobileSidebarOpen((prev) => !prev);
             }
           }}
+          isSettings={settingsView}
+          onBackFromSettings={closeSettings}
         />
-
-        {tags.length > 0 && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="muted">Filter by tag:</span>
-            {tags.map((tag) => (
-              <button
-                key={tag.id}
-                className={clsx('toggle', selectedTagIds.includes(tag.id) && 'active')}
-                onClick={() => toggleTagFilter(tag.id)}
-              >
-                {tag.name}
-                {typeof tag.usageCount === 'number' ? ` (${tag.usageCount})` : ''}
-              </button>
-            ))}
-            {selectedTagIds.length > 0 && (
-              <button className="btn-ghost" onClick={clearTagFilters}>
-                Clear tags
-              </button>
-            )}
-          </div>
-        )}
-
-        {error && <div className="muted" style={{ color: 'var(--danger)' }}>{error}</div>}
-
-        {displayItems.length === 0 ? (
-          <div className="empty-state">{emptyQuote || "You've read everything"}</div>
+        {settingsView ? (
+          <SettingsPage
+            onClose={closeSettings}
+            initialTheme={settings?.theme}
+          />
         ) : (
           <>
-            {viewMode === 'list' && (
-              <ItemList
-                items={displayItems}
-                expandedId={expandedId}
-                onExpand={handleExpand}
-                onToggleRead={handleToggleRead}
-                onOpenModal={handleOpenModal}
-                onUpdateTags={handleUpdateTags}
-                savedIds={savedIds}
-                onToggleSave={handleToggleSaved}
-              />
+            {tags.length > 0 && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span className="muted">Filter by tag:</span>
+                {tags.map((tag) => (
+                  <button
+                    key={tag.id}
+                    className={clsx('toggle', selectedTagIds.includes(tag.id) && 'active')}
+                    onClick={() => toggleTagFilter(tag.id)}
+                  >
+                    {tag.name}
+                    {typeof tag.usageCount === 'number' ? ` (${tag.usageCount})` : ''}
+                  </button>
+                ))}
+                {selectedTagIds.length > 0 && (
+                  <button className="btn-ghost" onClick={clearTagFilters}>
+                    Clear tags
+                  </button>
+                )}
+              </div>
             )}
-            {viewMode === 'card' && (
-              <ItemGrid
-                items={displayItems}
-                onOpen={handleOpenModal}
-                onToggleRead={handleToggleRead}
-                savedIds={savedIds}
-                onToggleSave={handleToggleSaved}
-              />
-            )}
-            {viewMode === 'magazine' && (
-              <ItemMagazine
-                items={displayItems}
-                onOpen={handleOpenModal}
-                onToggleRead={handleToggleRead}
-                savedIds={savedIds}
-                onToggleSave={handleToggleSaved}
-              />
+
+            {error && <div className="muted" style={{ color: 'var(--danger)' }}>{error}</div>}
+
+            {displayItems.length === 0 ? (
+              <div className="empty-state">{emptyQuote || "You've read everything"}</div>
+            ) : (
+              <>
+                {viewMode === 'list' && (
+                  <ItemList
+                    items={displayItems}
+                    expandedId={expandedId}
+                    onExpand={handleExpand}
+                    onToggleRead={handleToggleRead}
+                    onOpenModal={handleOpenModal}
+                    onUpdateTags={handleUpdateTags}
+                    savedIds={savedIds}
+                    onToggleSave={handleToggleSaved}
+                  />
+                )}
+                {viewMode === 'card' && (
+                  <ItemGrid
+                    items={displayItems}
+                    onOpen={handleOpenModal}
+                    onToggleRead={handleToggleRead}
+                    savedIds={savedIds}
+                    onToggleSave={handleToggleSaved}
+                  />
+                )}
+                {viewMode === 'magazine' && (
+                  <ItemMagazine
+                    items={displayItems}
+                    onOpen={handleOpenModal}
+                    onToggleRead={handleToggleRead}
+                    savedIds={savedIds}
+                    onToggleSave={handleToggleSaved}
+                  />
+                )}
+              </>
             )}
           </>
         )}
@@ -699,7 +744,6 @@ const App: React.FC = () => {
           }}
         />
       )}
-      {settingsOpen && <SettingsModal onClose={() => { setSettingsOpen(false); loadSettings(); }} />}
     </div>
   );
 };
