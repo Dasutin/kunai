@@ -26,9 +26,12 @@ Kunai is a clean, self-hosted RSS reader. Add your favorite feeds, browse in lis
 ## Settings
 
 - Refresh cadence: controlled by `REFRESH_INTERVAL_MINUTES` (default 10)
- - Refresh cadence: controlled by `REFRESH_INTERVAL_MINUTES` (default 5)
 - Data storage: SQLite lives in `./data` locally or `/data` in Docker
 - Port: default 3000; change via `PORT` in `.env`
+
+## Documentation
+
+Project documentation lives in [`docs/`](docs/README.md), including architecture, API, data model, deployment, companion clients, codebase review, and recommendations.
 
 ## Run without Docker (optional)
 

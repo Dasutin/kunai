@@ -81,7 +81,7 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [appliedDefaults, setAppliedDefaults] = useState(false);
   const [contentLoadingId, setContentLoadingId] = useState<number | null>(null);
-  const [headerCondensed, setHeaderCondensed] = useState(false);
+  const headerCondensed = false;
   const [isMobile, setIsMobile] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [emptyQuote, setEmptyQuote] = useState('');
@@ -120,15 +120,6 @@ const App: React.FC = () => {
     const totalUnread = feeds.reduce((sum, f) => sum + (f.unreadCount || 0), 0);
     document.title = totalUnread > 0 ? `(${totalUnread}) Kunai` : 'Kunai';
   }, [feeds]);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setHeaderCondensed(window.scrollY > 10);
-    };
-    handleScroll();
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   useEffect(() => {
     const handleResize = () => {
