@@ -1,4 +1,12 @@
 import React from 'react';
+import { Box, IconButton, Tooltip } from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import MenuOpenIcon from '@mui/icons-material/MenuOpen';
+import PushPinIcon from '@mui/icons-material/PushPin';
+import RssFeedIcon from '@mui/icons-material/RssFeed';
+import SettingsIcon from '@mui/icons-material/Settings';
+import { kunaiLayout } from '../theme';
 
 interface MiniSidebarProps {
   onSelectHome: () => void;
@@ -14,15 +22,76 @@ interface MiniSidebarProps {
   onPeekEnd: () => void;
 }
 
-export const MiniSidebar: React.FC<MiniSidebarProps> = ({ onSelectHome, onSelectSaved, onSettings, onAddFeed, isMobile, onToggleContext, sidebarPinned, onTogglePin, onTogglePeek, onPeekStart, onPeekEnd }) => {
-  return (
-    <aside
-      className="mini-sidebar"
-      onMouseEnter={() => { if (!sidebarPinned && !isMobile) onPeekStart(); }}
-      onMouseLeave={() => { if (!sidebarPinned && !isMobile) onPeekEnd(); }}
+const RailButton: React.FC<{ title: string; onClick: () => void; children: React.ReactNode }> = ({ title, onClick, children }) => (
+  <Tooltip title={title} placement="right">
+    <IconButton
+      aria-label={title}
+      onClick={onClick}
+      sx={{
+        width: 42,
+        height: 42,
+        borderRadius: 1,
+        color: 'var(--muted)',
+        bgcolor: 'transparent',
+        border: 'none',
+        '&:hover': {
+          bgcolor: 'transparent',
+          color: 'var(--text)'
+        }
+      }}
     >
-      <button
-        className="icon-btn"
+      {children}
+    </IconButton>
+  </Tooltip>
+);
+
+export const MiniSidebar: React.FC<MiniSidebarProps> = ({
+  onSelectHome,
+  onSelectSaved,
+  onSettings,
+  onAddFeed,
+  isMobile,
+  onToggleContext,
+  sidebarPinned,
+  onTogglePin,
+  onTogglePeek,
+  onPeekStart,
+  onPeekEnd
+}) => {
+  return (
+    <Box
+      component="aside"
+      onMouseEnter={() => {
+        if (!sidebarPinned && !isMobile) onPeekStart();
+      }}
+      onMouseLeave={() => {
+        if (!sidebarPinned && !isMobile) onPeekEnd();
+      }}
+      sx={{
+        width: kunaiLayout.miniSidebarWidth,
+        height: '100vh',
+        position: { xs: 'fixed', md: 'sticky' },
+        top: 0,
+        left: 0,
+        zIndex: { xs: 30, md: sidebarPinned ? 12 : 26 },
+        display: { xs: 'none', md: 'flex' },
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 1.5,
+        px: 1,
+        py: 1.5,
+        bgcolor: 'var(--surface-raised)',
+        backdropFilter: 'blur(12px)',
+        borderRight: '1px solid var(--card-border)',
+        ':root[data-theme="dark"] &': {
+          bgcolor: 'var(--surface-raised)'
+        },
+        ':root[data-theme="light"] &': {
+          bgcolor: 'var(--surface-raised)'
+        }
+      }}
+    >
+      <RailButton
         title="Newsfeed"
         onClick={() => {
           onSelectHome();
@@ -30,10 +99,9 @@ export const MiniSidebar: React.FC<MiniSidebarProps> = ({ onSelectHome, onSelect
           if (isMobile) onToggleContext();
         }}
       >
-        <span className="material-icons">rss_feed</span>
-      </button>
-      <button
-        className="icon-btn"
+        <RssFeedIcon fontSize="small" />
+      </RailButton>
+      <RailButton
         title="Saved"
         onClick={() => {
           onSelectSaved();
@@ -41,23 +109,23 @@ export const MiniSidebar: React.FC<MiniSidebarProps> = ({ onSelectHome, onSelect
           if (isMobile) onToggleContext();
         }}
       >
-        <span className="material-icons">bookmark</span>
-      </button>
-      <button className="icon-btn" title="Add feed" onClick={onAddFeed}>
-        <span className="material-icons">add</span>
-      </button>
+        <BookmarkIcon fontSize="small" />
+      </RailButton>
+      <RailButton title="Add feed" onClick={onAddFeed}>
+        <AddIcon />
+      </RailButton>
       {isMobile && (
-        <button className="icon-btn" title="Open menu" onClick={onToggleContext}>
-          <span className="material-icons">menu_open</span>
-        </button>
+        <RailButton title="Open menu" onClick={onToggleContext}>
+          <MenuOpenIcon />
+        </RailButton>
       )}
-      <div className="mini-sidebar-spacer" />
-      <button className="icon-btn" title="Settings" onClick={onSettings}>
-        <span className="material-icons">settings</span>
-      </button>
-      <button className="icon-btn" title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar'} onClick={onTogglePin}>
-        <span className="material-icons">{sidebarPinned ? 'push_pin' : 'push_pin'}</span>
-      </button>
-    </aside>
+      <Box sx={{ flex: 1 }} />
+      <RailButton title="Settings" onClick={onSettings}>
+        <SettingsIcon />
+      </RailButton>
+      <RailButton title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar'} onClick={onTogglePin}>
+        <PushPinIcon />
+      </RailButton>
+    </Box>
   );
 };

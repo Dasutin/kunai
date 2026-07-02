@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from '@mui/material';
 
 type Props = {
   onSubmit: (name: string) => Promise<void>;
@@ -29,24 +30,31 @@ export const CreateFolderModal: React.FC<Props> = ({ onSubmit, onClose }) => {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <header>
-          <h3 style={{ margin: 0 }}>New folder</h3>
-          <button className="btn-ghost" onClick={onClose} aria-label="Close">Close</button>
-        </header>
-        <input
-          className="input"
-          placeholder="Folder name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') handle(); }}
-        />
-        {error && <div className="muted" style={{ color: 'var(--danger)' }}>{error}</div>}
-        <button className="btn" onClick={handle} disabled={loading}>
-          {loading ? 'Creating…' : 'Create folder'}
-        </button>
-      </div>
-    </div>
+    <Dialog open onClose={loading ? undefined : onClose} fullWidth maxWidth="xs">
+      <DialogTitle>New folder</DialogTitle>
+      <DialogContent>
+        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+          <TextField
+            label="Folder name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handle();
+            }}
+            autoFocus
+            fullWidth
+          />
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="text" onClick={onClose} disabled={loading}>
+          Close
+        </Button>
+        <Button variant="contained" onClick={handle} disabled={loading}>
+          {loading ? 'Creating...' : 'Create folder'}
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };

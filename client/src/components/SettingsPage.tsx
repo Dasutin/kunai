@@ -1,25 +1,70 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  FormControlLabel,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Switch,
+  Tab,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tabs,
+  TextField,
+  Typography
+} from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
+import DownloadIcon from '@mui/icons-material/Download';
+import EditIcon from '@mui/icons-material/Edit';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { api } from '../api';
 import type { FeedWithUnread, Settings } from '@shared/types';
 
 type TabKey = 'General' | 'OPML' | 'Content';
 
 const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <section className="settings-section">
-    <h3>{title}</h3>
-    {children}
-  </section>
+  <Paper
+    component="section"
+    sx={{
+      border: '1px solid var(--card-border)',
+      borderRadius: 2,
+      p: 1.75,
+      bgcolor: 'var(--card-bg-soft)'
+    }}
+  >
+    <Stack spacing={1.25}>
+      <Typography variant="h6" fontWeight={800}>
+        {title}
+      </Typography>
+      {children}
+    </Stack>
+  </Paper>
 );
 
-const TabBar: React.FC<{ tabs: TabKey[]; active: TabKey; onSelect: (tab: TabKey) => void }> = ({ tabs, active, onSelect }) => (
-  <div className="settings-tabs">
-    {tabs.map((tab) => (
-      <button key={tab} className={tab === active ? 'tab active' : 'tab'} onClick={() => onSelect(tab)}>
-        {tab}
-      </button>
-    ))}
-  </div>
-);
+const feedFavicon = (url: string) => {
+  try {
+    const host = new URL(url).hostname;
+    if (host) return `https://icons.duckduckgo.com/ip3/${host}.ico`;
+  } catch {
+    return null;
+  }
+  return null;
+};
 
 export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settings['theme'] }> = ({ onClose, initialTheme }) => {
   const [settings, setSettings] = useState<Settings>({});
@@ -39,6 +84,19 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
 
   const applyTheme = (theme?: Settings['theme']) => {
     document.documentElement.setAttribute('data-theme', theme || 'default');
+  };
+
+  const loadFeeds = async () => {
+    setFeedsLoading(true);
+    setFeedsError(null);
+    try {
+      const data = await api.getFeeds();
+      setFeeds(data);
+    } catch (err: any) {
+      setFeedsError(err?.message || 'Failed to load feeds');
+    } finally {
+      setFeedsLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -83,6 +141,7 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
       const result = await api.importOpml(text);
       setImportResult(`Imported ${result.created}/${result.discovered} new feeds`);
       await save({});
+      await loadFeeds();
     } catch (err: any) {
       setImportResult(err?.message || 'Import failed');
     } finally {
@@ -98,19 +157,6 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
     a.download = 'feeds.opml';
     a.click();
     URL.revokeObjectURL(url);
-  };
-
-  const loadFeeds = async () => {
-    setFeedsLoading(true);
-    setFeedsError(null);
-    try {
-      const data = await api.getFeeds();
-      setFeeds(data);
-    } catch (err: any) {
-      setFeedsError(err?.message || 'Failed to load feeds');
-    } finally {
-      setFeedsLoading(false);
-    }
   };
 
   const toggleFeedEnabled = async (feed: FeedWithUnread) => {
@@ -146,10 +192,6 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
     }
   };
 
-  const openDelete = (feed: FeedWithUnread) => {
-    setDeleteTarget(feed);
-  };
-
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     setDeleting(true);
@@ -164,205 +206,230 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
     }
   };
 
-  const tabs: TabKey[] = ['General', 'Content', 'OPML'];
   const sortedFeeds = useMemo(() => [...feeds].sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' })), [feeds]);
 
-  if (loading) return <div className="main-card">Loading settings…</div>;
+  if (loading) {
+    return (
+      <Paper sx={{ p: 2, bgcolor: 'var(--card-bg-soft)', border: '1px solid var(--card-border)' }}>
+        <Typography color="var(--muted)">Loading settings...</Typography>
+      </Paper>
+    );
+  }
 
   return (
-    <div className="settings-page">
-      <div className="settings-header">
-        <div>
-          <h2>{activeTab}</h2>
-          {message && <div className="muted">{message}</div>}
-        </div>
-      </div>
+    <Stack spacing={1.75} sx={{ width: '100%', maxWidth: 960, mx: 'auto' }}>
+      <Stack spacing={0.5}>
+        <Typography variant="h5" fontWeight={800}>
+          {activeTab}
+        </Typography>
+        {message && <Typography color="var(--muted)">{message}</Typography>}
+      </Stack>
 
-      <TabBar tabs={tabs} active={activeTab} onSelect={(tab) => setActiveTab(tab)} />
+      <Tabs
+        value={activeTab}
+        onChange={(_, value) => setActiveTab(value)}
+        variant="scrollable"
+        scrollButtons="auto"
+        sx={{
+          minHeight: 44,
+          border: '1px solid var(--card-border)',
+          borderRadius: 2,
+          width: 'fit-content',
+          maxWidth: '100%',
+          bgcolor: 'var(--card-bg-soft)',
+          '& .MuiTab-root': { minHeight: 42, color: 'var(--muted)', fontWeight: 700 },
+          '& .Mui-selected': { color: 'var(--text)' }
+        }}
+      >
+        <Tab label="General" value="General" />
+        <Tab label="Content" value="Content" />
+        <Tab label="OPML" value="OPML" />
+      </Tabs>
 
       {activeTab === 'General' && (
-        <div className="settings-grid">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(260px, 1fr))' }, gap: 1.5 }}>
           <Section title="Preferences">
-            <div className="settings-group">
-              <label className="toggle inline">
-                <input
-                  type="checkbox"
-                  checked={!!settings.markReadOnOpen}
-                  onChange={(e) => save({ markReadOnOpen: e.target.checked })}
-                />
-                Mark read on open
-              </label>
-              <label className="toggle inline">
-                <input
-                  type="checkbox"
-                  checked={!!settings.unreadFirstDefault}
-                  onChange={(e) => save({ unreadFirstDefault: e.target.checked })}
-                />
-                Unread first default
-              </label>
-              <div className="field-row">
-                <span>Default view:</span>
-                <select value={settings.defaultViewMode || 'list'} onChange={(e) => save({ defaultViewMode: e.target.value as 'list' | 'card' | 'magazine' })}>
-                  <option value="list">List</option>
-                  <option value="card">Card</option>
-                  <option value="magazine">Magazine</option>
-                </select>
-              </div>
-              <div className="field-row">
-                <span>Theme:</span>
-                <select value={settings.theme || 'default'} onChange={(e) => save({ theme: e.target.value as Settings['theme'] })}>
-                  <option value="default">Current</option>
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                </select>
-              </div>
-              <div className="field-row">
-                <span>Refresh every (minutes):</span>
-                <input
-                  className="input"
-                  style={{ maxWidth: 140 }}
-                  type="number"
-                  min={1}
-                  value={settings.refreshMinutes ?? 5}
-                  onChange={(e) => save({ refreshMinutes: Math.max(1, Number(e.target.value) || 1) })}
-                />
-              </div>
-              <div className="field-row">
-                <span>RSS article retention:</span>
-                <select
-                  value={settings.articleRetention || 'off'}
-                  onChange={(e) => save({ articleRetention: e.target.value as any })}
+            <Stack spacing={1.5}>
+              <FormControlLabel
+                control={<Switch checked={!!settings.markReadOnOpen} onChange={(e) => save({ markReadOnOpen: e.target.checked })} />}
+                label="Mark read on open"
+              />
+              <FormControlLabel
+                control={<Switch checked={!!settings.unreadFirstDefault} onChange={(e) => save({ unreadFirstDefault: e.target.checked })} />}
+                label="Unread first default"
+              />
+              <FormControl fullWidth>
+                <InputLabel id="default-view-label">Default view</InputLabel>
+                <Select
+                  labelId="default-view-label"
+                  label="Default view"
+                  value={settings.defaultViewMode || 'list'}
+                  onChange={(e) => save({ defaultViewMode: e.target.value as 'list' | 'card' | 'magazine' })}
                 >
-                  <option value="off">Off</option>
-                  <option value="1w">1 week</option>
-                  <option value="1m">1 month</option>
-                  <option value="1y">1 year</option>
-                </select>
-              </div>
-            </div>
+                  <MenuItem value="list">List</MenuItem>
+                  <MenuItem value="card">Card</MenuItem>
+                  <MenuItem value="magazine">Magazine</MenuItem>
+                </Select>
+              </FormControl>
+              <FormControl fullWidth>
+                <InputLabel id="theme-label">Theme</InputLabel>
+                <Select
+                  labelId="theme-label"
+                  label="Theme"
+                  value={settings.theme || 'default'}
+                  onChange={(e) => save({ theme: e.target.value as Settings['theme'] })}
+                >
+                  <MenuItem value="default">Current</MenuItem>
+                  <MenuItem value="light">Light</MenuItem>
+                  <MenuItem value="dark">Dark</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                label="Refresh every (minutes)"
+                type="number"
+                inputProps={{ min: 1 }}
+                value={settings.refreshMinutes ?? 5}
+                onChange={(e) => save({ refreshMinutes: Math.max(1, Number(e.target.value) || 1) })}
+                fullWidth
+              />
+              <FormControl fullWidth>
+                <InputLabel id="retention-label">RSS article retention</InputLabel>
+                <Select
+                  labelId="retention-label"
+                  label="RSS article retention"
+                  value={settings.articleRetention || 'off'}
+                  onChange={(e) => save({ articleRetention: e.target.value as Settings['articleRetention'] })}
+                >
+                  <MenuItem value="off">Off</MenuItem>
+                  <MenuItem value="1w">1 week</MenuItem>
+                  <MenuItem value="1m">1 month</MenuItem>
+                  <MenuItem value="1y">1 year</MenuItem>
+                </Select>
+              </FormControl>
+            </Stack>
           </Section>
-        </div>
+        </Box>
       )}
 
       {activeTab === 'OPML' && (
-        <div className="settings-grid">
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(260px, 1fr))' }, gap: 1.5 }}>
           <Section title="OPML">
-            <div className="settings-group">
-              <div className="field-row">
-                <span style={{ minWidth: 64 }}>Import</span>
-                <input type="file" accept=".opml,.xml,text/xml" onChange={(e) => handleFile(e.target.files?.[0])} />
-              </div>
-              <div>
-                <button className="btn" onClick={exportOpml}>Export</button>
-              </div>
-              {importing && <div className="muted">Importing…</div>}
-              {importResult && <div className="muted">{importResult}</div>}
-            </div>
+            <Stack spacing={1.25} alignItems="flex-start">
+              <Button variant="outlined" startIcon={<UploadFileIcon />} component="label" disabled={importing}>
+                {importing ? 'Importing...' : 'Import'}
+                <Box
+                  component="input"
+                  type="file"
+                  accept=".opml,.xml,text/xml"
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFile(e.target.files?.[0])}
+                  sx={{ display: 'none' }}
+                />
+              </Button>
+              <Button variant="contained" startIcon={<DownloadIcon />} onClick={exportOpml}>
+                Export
+              </Button>
+              {importResult && <Alert severity={importResult.startsWith('Imported') ? 'success' : 'error'}>{importResult}</Alert>}
+            </Stack>
           </Section>
-        </div>
+        </Box>
       )}
 
       {activeTab === 'Content' && (
-        <div className="settings-table-wrap">
-          {feedsError && <div className="muted" style={{ color: 'var(--danger)' }}>{feedsError}</div>}
-          <div className="settings-table-scroll">
-            <table className="settings-table">
-              <thead>
-                <tr>
-                  <th style={{ width: 120 }}>Enabled</th>
-                  <th>Feed</th>
-                  <th style={{ width: 200 }}>Options</th>
-                </tr>
-              </thead>
-              <tbody>
+        <Stack spacing={1.25}>
+          {feedsError && <Alert severity="error">{feedsError}</Alert>}
+          <TableContainer component={Paper} sx={{ bgcolor: 'var(--card-bg-soft)', border: '1px solid var(--card-border)', borderRadius: 2 }}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ width: 120, color: 'var(--muted)', fontWeight: 800 }}>Enabled</TableCell>
+                  <TableCell sx={{ color: 'var(--muted)', fontWeight: 800 }}>Feed</TableCell>
+                  <TableCell align="right" sx={{ width: 160, color: 'var(--muted)', fontWeight: 800 }}>
+                    Options
+                  </TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
                 {feedsLoading && (
-                  <tr><td colSpan={3} className="muted">Loading feeds…</td></tr>
+                  <TableRow>
+                    <TableCell colSpan={3} sx={{ color: 'var(--muted)' }}>
+                      Loading feeds...
+                    </TableCell>
+                  </TableRow>
                 )}
                 {!feedsLoading && sortedFeeds.length === 0 && (
-                  <tr><td colSpan={3} className="muted">No feeds configured yet</td></tr>
+                  <TableRow>
+                    <TableCell colSpan={3} sx={{ color: 'var(--muted)' }}>
+                      No feeds configured yet
+                    </TableCell>
+                  </TableRow>
                 )}
                 {sortedFeeds.map((feed) => (
-                  <tr key={feed.id}>
-                    <td>
-                      <button
-                        className={feed.enabled ? 'toggle-pill on' : 'toggle-pill'}
-                        onClick={() => toggleFeedEnabled(feed)}
-                        aria-pressed={feed.enabled}
-                        aria-label={feed.enabled ? 'Disable feed' : 'Enable feed'}
-                      >
-                        <span className="thumb" />
-                        <span className="label">{feed.enabled ? 'On' : 'Off'}</span>
-                      </button>
-                    </td>
-                    <td>
-                      <div className="feed-cell">
-                        {(() => {
-                          try {
-                            const host = new URL(feed.url).hostname;
-                            if (host) return <img className="feed-favicon-sm" src={`https://icons.duckduckgo.com/ip3/${host}.ico`} alt="" />;
-                          } catch {
-                            return null;
-                          }
-                          return null;
-                        })()}
-                        <div className="feed-meta">
-                          <div className="feed-title-row">{feed.title || 'Untitled feed'}</div>
-                          <div className="feed-url muted">{feed.url}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="settings-row-actions">
-                        <button className="icon-btn" title="Edit feed" aria-label="Edit feed" onClick={() => openEdit(feed)}>
-                          <span className="material-icons">edit</span>
-                        </button>
-                        <button className="icon-btn danger" title="Delete feed" aria-label="Delete feed" onClick={() => openDelete(feed)}>
-                          <span className="material-icons">delete</span>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                  <TableRow key={feed.id} hover>
+                    <TableCell>
+                      <Switch
+                        checked={feed.enabled}
+                        onChange={() => toggleFeedEnabled(feed)}
+                        inputProps={{ 'aria-label': feed.enabled ? 'Disable feed' : 'Enable feed' }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Stack direction="row" alignItems="center" spacing={1.25} minWidth={0}>
+                        <Avatar src={feedFavicon(feed.url) || undefined} alt="" variant="rounded" sx={{ width: 22, height: 22 }} />
+                        <Box minWidth={0}>
+                          <Typography fontWeight={800} noWrap>
+                            {feed.title || 'Untitled feed'}
+                          </Typography>
+                          <Typography variant="body2" color="var(--muted)" noWrap>
+                            {feed.url}
+                          </Typography>
+                        </Box>
+                      </Stack>
+                    </TableCell>
+                    <TableCell align="right">
+                      <IconButton aria-label="Edit feed" title="Edit feed" onClick={() => openEdit(feed)}>
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton aria-label="Delete feed" title="Delete feed" onClick={() => setDeleteTarget(feed)} sx={{ color: 'var(--danger)' }}>
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
                 ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+              </TableBody>
+            </Table>
+          </TableContainer>
+        </Stack>
       )}
 
-      {(editTarget || deleteTarget) && (
-        <div className="dialog-backdrop" role="dialog" aria-modal="true">
-          <div className="dialog">
-            {editTarget && (
-              <>
-                <h3>Edit feed</h3>
-                <div className="field-row">
-                  <span>Name</span>
-                  <input
-                    className="input"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-                <div className="dialog-actions">
-                  <button className="btn-ghost" onClick={() => { if (!savingEdit) { setEditTarget(null); setEditName(''); } }}>Cancel</button>
-                  <button className="btn" disabled={savingEdit || !editName.trim()} onClick={confirmEdit}>Save</button>
-                </div>
-              </>
-            )}
-            {deleteTarget && (
-              <>
-                <h3>Delete feed</h3>
-                <p className="muted">Are you sure you want to delete “{deleteTarget.title || deleteTarget.url}”? This cannot be undone.</p>
-                <div className="dialog-actions">
-                  <button className="btn-ghost" onClick={() => { if (!deleting) setDeleteTarget(null); }}>Cancel</button>
-                  <button className="btn-danger" disabled={deleting} onClick={confirmDelete}>Delete</button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      <Dialog open={!!editTarget} onClose={() => !savingEdit && setEditTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Edit feed</DialogTitle>
+        <DialogContent>
+          <TextField label="Name" value={editName} onChange={(e) => setEditName(e.target.value)} autoFocus fullWidth sx={{ mt: 0.5 }} />
+        </DialogContent>
+        <DialogActions>
+          <Button variant="text" onClick={() => { if (!savingEdit) { setEditTarget(null); setEditName(''); } }}>
+            Cancel
+          </Button>
+          <Button variant="contained" disabled={savingEdit || !editName.trim()} onClick={confirmEdit}>
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!deleteTarget} onClose={() => !deleting && setDeleteTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>Delete feed</DialogTitle>
+        <DialogContent>
+          <Typography color="var(--muted)">Are you sure you want to delete "{deleteTarget?.title || deleteTarget?.url}"? This cannot be undone.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="text" onClick={() => { if (!deleting) setDeleteTarget(null); }}>
+            Cancel
+          </Button>
+          <Button variant="contained" color="error" disabled={deleting} onClick={confirmDelete}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Stack>
   );
 };

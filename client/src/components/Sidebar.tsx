@@ -1,18 +1,27 @@
 import React, { useState } from 'react';
+import {
+  Avatar,
+  Badge,
+  Box,
+  Collapse,
+  Divider,
+  IconButton,
+  List,
+  ListItemButton,
+  Stack,
+  Tooltip,
+  Typography
+} from '@mui/material';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FolderIcon from '@mui/icons-material/Folder';
+import RssFeedIcon from '@mui/icons-material/RssFeed';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { FeedWithUnread, Folder } from '@shared/types';
-import clsx from 'clsx';
-
-const timeAgo = (iso: string | null) => {
-  if (!iso) return 'never';
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.round(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.round(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.round(hrs / 24);
-  return `${days}d ago`;
-};
+import { kunaiLayout } from '../theme';
 
 type Props = {
   feeds: FeedWithUnread[];
@@ -37,7 +46,84 @@ type Props = {
   onClosePeek: () => void;
   onPeek: () => void;
   isMobile?: boolean;
+  mobileOpen?: boolean;
 };
+
+const feedFavicon = (url: string) => {
+  try {
+    const host = new URL(url).hostname;
+    if (!host) return null;
+    return `https://icons.duckduckgo.com/ip3/${host}.ico`;
+  } catch {
+    return null;
+  }
+};
+
+const countBadge = (count: number) => (
+  <Badge
+    badgeContent={count}
+    max={999}
+    sx={{
+      '& .MuiBadge-badge': {
+        position: 'static',
+        transform: 'none',
+        minWidth: 'auto',
+        height: 'auto',
+        borderRadius: 0,
+        bgcolor: 'transparent',
+        color: 'var(--muted)',
+        fontSize: 12,
+        fontWeight: 700,
+        lineHeight: 1
+      }
+    }}
+  />
+);
+
+const rowSx = (active?: boolean, dropTarget?: boolean, dragging?: boolean, variant?: 'news' | 'saved' | 'folder', depth = 0) => ({
+  position: 'relative',
+  display: 'grid',
+  gridTemplateColumns: 'minmax(0, 1fr) auto',
+  alignItems: 'center',
+  gap: 0.5,
+  minHeight: 30,
+  px: 0.75,
+  py: 0.35,
+  pl: 0.75 + depth * 1.5,
+  borderRadius: '10px',
+  border: '1px solid',
+  borderColor: dropTarget ? 'var(--accent)' : active ? 'rgba(56, 189, 248, 0.5)' : 'transparent',
+  bgcolor:
+    active
+      ? 'rgba(56, 189, 248, 0.12)'
+      : dropTarget
+        ? 'rgba(56, 189, 248, 0.08)'
+        : variant === 'news'
+          ? 'rgba(56, 189, 248, 0.04)'
+          : variant === 'saved'
+            ? 'rgba(167, 139, 250, 0.05)'
+            : 'transparent',
+  color: 'var(--text)',
+  opacity: dragging ? 0.55 : 1,
+  outline: dropTarget ? '1px solid rgba(56, 189, 248, 0.4)' : 'none',
+  cursor: 'pointer',
+  transition: 'border-color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease',
+  '&:hover': {
+    bgcolor: active ? 'rgba(56, 189, 248, 0.14)' : 'rgba(255, 255, 255, 0.05)'
+  },
+  ...(depth > 0
+    ? {
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          left: 8 + (depth - 1) * 12,
+          top: -2,
+          bottom: -2,
+          borderLeft: '1px solid var(--card-border)'
+        }
+      }
+    : {})
+});
 
 export const Sidebar: React.FC<Props> = ({
   feeds,
@@ -48,32 +134,26 @@ export const Sidebar: React.FC<Props> = ({
   onSelectFolder,
   onOpenCreateFolder,
   onOpenSettings,
-  onMoveFeed,
   onReorderFolders,
   onReorderFeeds = () => {},
   onDeleteFolder,
   onSelectSaved,
   savedCount,
   savedView,
-  collapsed,
-  onToggleCollapse,
   pinned,
   peek,
   onClosePeek,
   onPeek,
-  isMobile = false
+  isMobile = false,
+  mobileOpen = false
 }) => {
   const unreadTotal = feeds.reduce((acc, f) => acc + (f.unreadCount || 0), 0);
-  const [feedsOpen, setFeedsOpen] = useState(false);
   const [dragFeedId, setDragFeedId] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<string | 'root' | null>(null);
   const [dragFolderId, setDragFolderId] = useState<string | null>(null);
   const [folderDropTarget, setFolderDropTarget] = useState<string | 'root' | null>(null);
   const [feedDropTargetId, setFeedDropTargetId] = useState<number | null>(null);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
-
-  const showFeedList = !collapsed || feedsOpen;
-  const closeFlyout = () => setFeedsOpen(false);
 
   const sortFeeds = (list: FeedWithUnread[]) =>
     [...list].sort((a, b) => (a.position || 0) - (b.position || 0) || a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
@@ -90,6 +170,14 @@ export const Sidebar: React.FC<Props> = ({
   const feedNodes = sortFeeds(uncategorizedFeeds).map((feed) => ({ type: 'feed' as const, name: feed.title, feed }));
   const rootNodes = [...folderNodes, ...feedNodes];
 
+  const resetDrag = () => {
+    setDropTarget(null);
+    setFolderDropTarget(null);
+    setFeedDropTargetId(null);
+    setDragFeedId(null);
+    setDragFolderId(null);
+  };
+
   const allowDrop = (e: React.DragEvent) => {
     if (dragFeedId !== null || dragFolderId !== null) {
       e.preventDefault();
@@ -97,24 +185,11 @@ export const Sidebar: React.FC<Props> = ({
     }
   };
 
-  const feedFavicon = (url: string) => {
-    try {
-      const host = new URL(url).hostname;
-      if (!host) return null;
-      return `https://icons.duckduckgo.com/ip3/${host}.ico`;
-    } catch {
-      return null;
-    }
-  };
-
   const handleFeedDropToFolder = (folderId: string | null) => {
     if (dragFeedId === null) return;
     const list = sortFeeds(feeds.filter((f) => (f.folderId ?? null) === folderId)).map((f) => f.id).filter((id) => id !== dragFeedId);
-    const next = [...list, dragFeedId];
-    onReorderFeeds(folderId, next);
-    setDropTarget(null);
-    setDragFeedId(null);
-    setFeedDropTargetId(null);
+    onReorderFeeds(folderId, [...list, dragFeedId]);
+    resetDrag();
   };
 
   const handleFeedDropOnFeed = (targetFeedId: number) => {
@@ -125,11 +200,8 @@ export const Sidebar: React.FC<Props> = ({
     const ordered = sortFeeds(feeds.filter((f) => (f.folderId ?? null) === targetFolder)).map((f) => f.id).filter((id) => id !== dragFeedId);
     const insertIndex = ordered.indexOf(targetFeedId);
     if (insertIndex === -1) return;
-    const next = [...ordered.slice(0, insertIndex), dragFeedId, ...ordered.slice(insertIndex)];
-    onReorderFeeds(targetFolder, next);
-    setDropTarget(null);
-    setDragFeedId(null);
-    setFeedDropTargetId(null);
+    onReorderFeeds(targetFolder, [...ordered.slice(0, insertIndex), dragFeedId, ...ordered.slice(insertIndex)]);
+    resetDrag();
   };
 
   const handleFolderDrop = (targetId: string | null) => {
@@ -142,350 +214,313 @@ export const Sidebar: React.FC<Props> = ({
       setDragFolderId(null);
       return;
     }
-    const next = [...filtered.slice(0, insertIndex), dragFolderId, ...filtered.slice(insertIndex)];
-    onReorderFolders(next);
-    setFolderDropTarget(null);
-    setDragFolderId(null);
+    onReorderFolders([...filtered.slice(0, insertIndex), dragFolderId, ...filtered.slice(insertIndex)]);
+    resetDrag();
+  };
+
+  const titleWithIcon = (icon: React.ReactNode, label: string) => (
+    <Stack direction="row" alignItems="center" spacing={1} minWidth={0}>
+      {icon}
+      <Typography variant="body2" fontWeight={700} noWrap>
+        {label}
+      </Typography>
+    </Stack>
+  );
+
+  const feedIcon = (feed: FeedWithUnread) => {
+    const favicon = feedFavicon(feed.url);
+    if (favicon) {
+      return <Avatar src={favicon} alt="" variant="rounded" sx={{ width: 18, height: 18, bgcolor: 'rgba(255, 255, 255, 0.08)' }} />;
+    }
+    return <RssFeedIcon sx={{ fontSize: 18, color: 'var(--muted)' }} />;
   };
 
   return (
-    <aside
-      className={clsx('sidebar', collapsed && 'collapsed', !pinned && 'unpinned', peek && 'peek')}
-      onMouseEnter={() => { if (!pinned) onPeek(); }}
-      onMouseLeave={() => { if (!pinned) onClosePeek(); }}
+    <Box
+      component="aside"
+      onMouseEnter={() => {
+        if (!pinned) onPeek();
+      }}
+      onMouseLeave={() => {
+        if (!pinned) onClosePeek();
+      }}
+      sx={{
+        width: kunaiLayout.sidebarWidth,
+        height: '100vh',
+        position: { xs: 'fixed', md: pinned ? 'sticky' : 'fixed' },
+        top: 0,
+        left: { xs: 0, md: pinned ? 'auto' : kunaiLayout.miniSidebarWidth },
+        zIndex: { xs: 25, md: pinned ? 10 : 24 },
+        transform: {
+          xs: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
+          md: pinned || peek ? 'translateX(0)' : 'translateX(-100%)'
+        },
+        transition: 'transform 0.2s ease',
+        alignSelf: 'flex-start',
+        overflowY: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 1.25,
+        px: 1.5,
+        pb: 1.5,
+        pt: 0,
+        bgcolor: 'var(--surface-raised)',
+        backdropFilter: 'blur(12px)',
+        borderRight: '1px solid var(--card-border)',
+        ':root[data-theme="dark"] &': {
+          bgcolor: 'var(--surface-raised)'
+        },
+        ':root[data-theme="light"] &': {
+          bgcolor: 'var(--surface-raised)'
+        }
+      }}
     >
-      <header>
-        {!collapsed && <span>Feeds</span>}
-        <div className="sidebar-actions">
+      <Box
+        component="header"
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) auto',
+          alignItems: 'center',
+          columnGap: 1,
+          width: '100%',
+          minHeight: 48
+        }}
+      >
+        <Typography fontWeight={800} sx={{ lineHeight: 1.2 }}>
+          Feeds
+        </Typography>
+        <Stack direction="row" alignItems="center" spacing={0.5} sx={{ justifySelf: 'end' }}>
           {isMobile && (
-            <button
-              className="btn-ghost icon-btn settings-btn"
-              onClick={onOpenSettings}
-              aria-label="Settings"
-              title="Settings"
-            >
-              <span className="material-icons">settings</span>
-            </button>
+            <Tooltip title="Settings">
+              <IconButton aria-label="Settings" size="small" onClick={onOpenSettings}>
+                <SettingsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
           )}
-          <button
-            className="btn-ghost icon-btn"
-            onClick={onOpenCreateFolder}
-            aria-label="Add folder"
-            title="Add folder"
-          >
-            <span className="material-icons">create_new_folder</span>
-          </button>
-        </div>
-      </header>
+          <Tooltip title="Add folder">
+            <IconButton aria-label="Add folder" size="small" onClick={onOpenCreateFolder}>
+              <CreateNewFolderIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      </Box>
 
-      {!collapsed && (
-        <>
-          <div className="feed-list">
-            <div
-              className={clsx('feed-row', 'tree-feed', 'tree-news', selectedFeedId === null && selectedFolderId === null && !savedView && 'active', (dropTarget === 'root' || folderDropTarget === 'root') && 'drop-target')}
-              onClick={() => { onSelectFeed(null); onSelectFolder(null); setDropTarget(null); setFolderDropTarget(null); setFeedDropTargetId(null); setDragFeedId(null); setDragFolderId(null); setFeedsOpen(false); }}
-              onDragOver={allowDrop}
-              onDragEnter={() => {
-                if (dragFeedId !== null) setDropTarget('root');
-                if (dragFolderId !== null) setFolderDropTarget('root');
-              }}
-              onDragLeave={() => { setDropTarget(null); setFolderDropTarget(null); setFeedDropTargetId(null); }}
-              onDrop={(e) => {
-                e.preventDefault();
-                if (dragFeedId !== null) handleFeedDropToFolder(null);
-                if (dragFolderId !== null) handleFolderDrop(null);
-              }}
-            >
-              <div className="title">
-                <span className="material-icons tree-icon">rss_feed</span>
-                Newsfeed
-              </div>
-              <span className="badge">{unreadTotal}</span>
-            </div>
-            <div
-              className={clsx('feed-row', 'tree-feed', 'tree-saved', savedView && 'active')}
-              onClick={() => { onSelectSaved(); setDropTarget(null); setFolderDropTarget(null); setFeedDropTargetId(null); setDragFeedId(null); setDragFolderId(null); setFeedsOpen(false); }}
-            >
-              <div className="title">
-                <span className="material-icons tree-icon">bookmark</span>
-                Read Later
-              </div>
-              <span className="badge">{savedCount}</span>
-            </div>
-            <div className="tree-divider" />
+      <List role="tree" aria-label="Primary feeds" disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        <ListItemButton
+          component="div"
+          role="treeitem"
+          aria-level={1}
+          aria-selected={selectedFeedId === null && selectedFolderId === null && !savedView}
+          sx={rowSx(selectedFeedId === null && selectedFolderId === null && !savedView, dropTarget === 'root' || folderDropTarget === 'root', false, 'news')}
+          onClick={() => {
+            onSelectFeed(null);
+            onSelectFolder(null);
+            resetDrag();
+          }}
+          onDragOver={allowDrop}
+          onDragEnter={() => {
+            if (dragFeedId !== null) setDropTarget('root');
+            if (dragFolderId !== null) setFolderDropTarget('root');
+          }}
+          onDragLeave={() => {
+            setDropTarget(null);
+            setFolderDropTarget(null);
+            setFeedDropTargetId(null);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            if (dragFeedId !== null) handleFeedDropToFolder(null);
+            if (dragFolderId !== null) handleFolderDrop(null);
+          }}
+        >
+          {titleWithIcon(<RssFeedIcon sx={{ fontSize: 18 }} />, 'Newsfeed')}
+          {countBadge(unreadTotal)}
+        </ListItemButton>
 
-            <div className="feed-tree">
-              {rootNodes.map((node) => {
-                if (node.type === 'folder') {
-                  const { folder, feeds: folderFeeds } = node;
-                  return (
-                    <div key={folder.id} className="tree-group">
-                      <div
-                        className={clsx(
-                          'feed-row',
-                          'tree-folder',
-                          selectedFolderId === folder.id && !selectedFeedId && 'active',
-                          (dropTarget === folder.id || folderDropTarget === folder.id) && 'drop-target',
-                          dragFolderId === folder.id && 'dragging'
-                        )}
-                        onClick={() => onSelectFolder(folder.id)}
+        <ListItemButton
+          component="div"
+          role="treeitem"
+          aria-level={1}
+          aria-selected={savedView}
+          sx={rowSx(savedView, false, false, 'saved')}
+          onClick={() => {
+            onSelectSaved();
+            resetDrag();
+          }}
+        >
+          {titleWithIcon(<BookmarkIcon sx={{ fontSize: 18 }} />, 'Read Later')}
+          {countBadge(savedCount)}
+        </ListItemButton>
+      </List>
+
+      <Divider sx={{ borderColor: 'var(--card-border)' }} />
+
+      <List role="tree" aria-label="Feeds and folders" disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {rootNodes.map((node) => {
+          if (node.type === 'folder') {
+            const { folder, feeds: folderFeeds } = node;
+            const folderCollapsed = collapsedFolders.has(folder.id);
+            return (
+              <Box key={folder.id} role="none" sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                <ListItemButton
+                  component="div"
+                  role="treeitem"
+                  aria-level={1}
+                  aria-expanded={!folderCollapsed}
+                  aria-selected={selectedFolderId === folder.id && !selectedFeedId}
+                  draggable
+                  sx={rowSx(
+                    selectedFolderId === folder.id && !selectedFeedId,
+                    dropTarget === folder.id || folderDropTarget === folder.id,
+                    dragFolderId === folder.id,
+                    'folder'
+                  )}
+                  onClick={() => onSelectFolder(folder.id)}
+                  onDragOver={allowDrop}
+                  onDragEnter={() => {
+                    if (dragFeedId !== null) setDropTarget(folder.id);
+                    if (dragFolderId !== null && dragFolderId !== folder.id) setFolderDropTarget(folder.id);
+                  }}
+                  onDragLeave={() => {
+                    setDropTarget(null);
+                    setFolderDropTarget(null);
+                    setFeedDropTargetId(null);
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (dragFeedId !== null) handleFeedDropToFolder(folder.id);
+                    else if (dragFolderId !== null && dragFolderId !== folder.id) handleFolderDrop(folder.id);
+                  }}
+                  onDragStart={(e) => {
+                    setDragFolderId(folder.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', folder.id);
+                  }}
+                  onDragEnd={resetDrag}
+                >
+                  <Stack direction="row" alignItems="center" spacing={0.5} minWidth={0}>
+                    <Tooltip title={folderCollapsed ? 'Expand folder' : 'Collapse folder'}>
+                      <IconButton
+                        size="small"
+                        aria-label={folderCollapsed ? 'Expand folder' : 'Collapse folder'}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCollapsedFolders((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(folder.id)) next.delete(folder.id);
+                            else next.add(folder.id);
+                            return next;
+                          });
+                        }}
+                        sx={{ width: 26, height: 26, flex: '0 0 auto' }}
+                      >
+                        {folderCollapsed ? <ChevronRightIcon sx={{ fontSize: 17 }} /> : <ExpandMoreIcon sx={{ fontSize: 17 }} />}
+                      </IconButton>
+                    </Tooltip>
+                    <FolderIcon sx={{ fontSize: 18, color: 'var(--muted)', flex: '0 0 auto' }} />
+                    <Typography variant="body2" fontWeight={700} noWrap>
+                      {folder.name}
+                    </Typography>
+                  </Stack>
+                  <Stack direction="row" alignItems="center" spacing={0.25}>
+                    {countBadge(folder.unreadCount)}
+                    <Tooltip title="Delete folder">
+                      <IconButton
+                        aria-label={`Delete folder ${folder.name}`}
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteFolder(folder.id);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        sx={{
+                          color: 'var(--danger)',
+                          width: 28,
+                          height: 28
+                        }}
+                      >
+                        <DeleteIcon sx={{ fontSize: 17 }} />
+                      </IconButton>
+                    </Tooltip>
+                  </Stack>
+                </ListItemButton>
+                <Collapse in={!folderCollapsed} timeout="auto" unmountOnExit>
+                  <List role="group" disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                    {sortFeeds(folderFeeds).map((feed) => (
+                      <ListItemButton
+                        key={feed.id}
+                        component="div"
+                        role="treeitem"
+                        aria-level={2}
+                        aria-selected={selectedFeedId === feed.id}
+                        draggable
+                        sx={rowSx(selectedFeedId === feed.id, feedDropTargetId === feed.id, dragFeedId === feed.id, undefined, 1)}
+                        onClick={() => onSelectFeed(feed.id)}
+                        onDragStart={(e) => {
+                          setDragFeedId(feed.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', `${feed.id}`);
+                        }}
+                        onDragEnd={resetDrag}
                         onDragOver={allowDrop}
                         onDragEnter={() => {
-                          if (dragFeedId !== null) setDropTarget(folder.id);
-                          if (dragFolderId !== null && dragFolderId !== folder.id) setFolderDropTarget(folder.id);
+                          if (dragFeedId !== null) setFeedDropTargetId(feed.id);
                         }}
-                        onDragLeave={() => { setDropTarget(null); setFolderDropTarget(null); setFeedDropTargetId(null); }}
+                        onDragLeave={() => setFeedDropTargetId(null)}
                         onDrop={(e) => {
                           e.preventDefault();
-                          if (dragFeedId !== null) handleFeedDropToFolder(folder.id);
-                          else if (dragFolderId !== null && dragFolderId !== folder.id) handleFolderDrop(folder.id);
+                          if (dragFeedId !== null) handleFeedDropOnFeed(feed.id);
                         }}
-                        draggable
-                        onDragStart={(e) => { setDragFolderId(folder.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', folder.id); }}
-                        onDragEnd={() => { setDragFolderId(null); setFolderDropTarget(null); }}
                       >
-                        <div className="title">
-                          <button
-                            className="icon-btn folder-toggle-btn"
-                            style={{ padding: 4, width: 28, height: 28, marginRight: 2 }}
-                            aria-label={collapsedFolders.has(folder.id) ? 'Expand folder' : 'Collapse folder'}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setCollapsedFolders((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(folder.id)) next.delete(folder.id);
-                                else next.add(folder.id);
-                                return next;
-                              });
-                            }}
-                          >
-                            <span className="material-icons" style={{ fontSize: 16 }}>{collapsedFolders.has(folder.id) ? 'chevron_right' : 'expand_more'}</span>
-                          </button>
-                          <span className="material-icons tree-icon">folder</span>
-                          <span className="folder-name">{folder.name}</span>
-                        </div>
-                        <div className="folder-count">
-                          <span className="badge">{folder.unreadCount}</span>
-                          <button
-                            className="btn-ghost icon-btn folder-trash-btn"
-                            aria-label={`Delete folder ${folder.name}`}
-                            title="Delete folder"
-                            onClick={(e) => { e.stopPropagation(); onDeleteFolder(folder.id); }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                          >
-                            <span className="material-icons">delete</span>
-                          </button>
-                        </div>
-                      </div>
-                      {!collapsedFolders.has(folder.id) && (
-                        <div className="tree-children">
-                          {sortFeeds(folderFeeds).map((feed) => (
-                            <div
-                              key={feed.id}
-                              className={clsx(
-                                'feed-row',
-                                'tree-feed',
-                                selectedFeedId === feed.id && 'active',
-                                dragFeedId === feed.id && 'dragging',
-                                feedDropTargetId === feed.id && 'drop-target'
-                              )}
-                              onClick={() => { onSelectFeed(feed.id); setFeedsOpen(false); }}
-                              draggable
-                              onDragStart={(e) => { setDragFeedId(feed.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', `${feed.id}`); }}
-                              onDragEnd={() => { setDragFeedId(null); setDropTarget(null); setFeedDropTargetId(null); }}
-                              onDragOver={allowDrop}
-                              onDragEnter={() => {
-                                if (dragFeedId !== null) setFeedDropTargetId(feed.id);
-                              }}
-                              onDragLeave={() => setFeedDropTargetId(null)}
-                              onDrop={(e) => {
-                                e.preventDefault();
-                                if (dragFeedId !== null) handleFeedDropOnFeed(feed.id);
-                              }}
-                            >
-                              <div className="title">
-                                {feedFavicon(feed.url) ? (
-                                  <img src={feedFavicon(feed.url)!} alt="" className="feed-favicon" />
-                                ) : (
-                                  <span className="material-icons tree-icon">rss_feed</span>
-                                )}
-                                {feed.title}
-                              </div>
-                              <span className="badge">{feed.unreadCount}</span>
-                              <div className="actions" onClick={(e) => e.stopPropagation()} />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
+                        {titleWithIcon(feedIcon(feed), feed.title)}
+                        {countBadge(feed.unreadCount)}
+                      </ListItemButton>
+                    ))}
+                  </List>
+                </Collapse>
+              </Box>
+            );
+          }
+
+          const { feed } = node;
+          return (
+            <ListItemButton
+              key={feed.id}
+              component="div"
+              role="treeitem"
+              aria-level={1}
+              aria-selected={selectedFeedId === feed.id}
+              draggable
+              sx={rowSx(selectedFeedId === feed.id, dropTarget === 'root' || feedDropTargetId === feed.id, dragFeedId === feed.id)}
+              onClick={() => onSelectFeed(feed.id)}
+              onDragStart={(e) => {
+                setDragFeedId(feed.id);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', `${feed.id}`);
+              }}
+              onDragEnd={resetDrag}
+              onDragOver={allowDrop}
+              onDragEnter={() => {
+                if (dragFeedId !== null) {
+                  setDropTarget('root');
+                  setFeedDropTargetId(feed.id);
                 }
-
-                const { feed } = node;
-                return (
-                  <div
-                    key={feed.id}
-                    className={clsx('feed-row', 'tree-feed', selectedFeedId === feed.id && 'active', dragFeedId === feed.id && 'dragging', dropTarget === 'root' && 'drop-target-root', feedDropTargetId === feed.id && 'drop-target')}
-                    onClick={() => { onSelectFeed(feed.id); setFeedsOpen(false); }}
-                    draggable
-                    onDragStart={(e) => { setDragFeedId(feed.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', `${feed.id}`); }}
-                    onDragEnd={() => { setDragFeedId(null); setDropTarget(null); setFeedDropTargetId(null); }}
-                    onDragOver={allowDrop}
-                    onDragEnter={() => {
-                      if (dragFeedId !== null) {
-                        setDropTarget('root');
-                        setFeedDropTargetId(feed.id);
-                      }
-                    }}
-                    onDragLeave={() => { setDropTarget(null); setFeedDropTargetId(null); }}
-                    onDrop={(e) => { e.preventDefault(); if (dragFeedId !== null) handleFeedDropOnFeed(feed.id); }}
-                  >
-                    <div className="title">
-                      {feedFavicon(feed.url) ? (
-                        <img src={feedFavicon(feed.url)!} alt="" className="feed-favicon" />
-                      ) : (
-                        <span className="material-icons tree-icon">rss_feed</span>
-                      )}
-                      {feed.title}
-                    </div>
-                    <span className="badge">{feed.unreadCount}</span>
-                    <div className="actions" onClick={(e) => e.stopPropagation()} />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </>
-      )}
-
-      {collapsed && (
-        <>
-          <div
-            className={clsx('feed-row', selectedFeedId === null && selectedFolderId === null && 'active', 'collapsed-trigger')}
-            onClick={() => {
-              onSelectFeed(null);
-              onSelectFolder(null);
-              setFeedsOpen((prev) => !prev);
-            }}
-            title="Newsfeed"
-          >
-            <span className="material-icons">rss_feed</span>
-          </div>
-          {showFeedList && (
-            <div className={clsx('feed-list', 'collapsed-flyout')}>
-              <div className="feed-row" onClick={() => { onSelectFeed(null); onSelectFolder(null); closeFlyout(); }}>
-                <div className="title">
-                  <span className="material-icons tree-icon">rss_feed</span>
-                  Newsfeed
-                </div>
-                <span className="badge">{unreadTotal}</span>
-                <div className="meta">All sources</div>
-              </div>
-                <div
-                  className={clsx('feed-row', 'tree-feed', 'tree-saved', savedView && 'active')}
-                  onClick={() => { onSelectSaved(); closeFlyout(); }}
-                >
-                  <div className="title">
-                    <span className="material-icons tree-icon">bookmark</span>
-                    Read Later
-                  </div>
-                  <span className="badge">{savedCount}</span>
-                </div>
-
-                <div className="feed-tree">
-                  {rootNodes.map((node) => {
-                    if (node.type === 'folder') {
-                      const { folder, feeds: folderFeeds } = node;
-                      return (
-                        <div key={folder.id} className="tree-group">
-                          <div
-                            className={clsx('feed-row', 'tree-folder', selectedFolderId === folder.id && !selectedFeedId && 'active', dropTarget === folder.id && 'drop-target')}
-                            onClick={() => { onSelectFolder(folder.id); closeFlyout(); }}
-                            onDragOver={allowDrop}
-                            onDragEnter={() => dragFeedId !== null && setDropTarget(folder.id)}
-                            onDragLeave={() => { setDropTarget(null); setFeedDropTargetId(null); }}
-                            onDrop={(e) => { e.preventDefault(); handleFeedDropToFolder(folder.id); }}
-                          >
-                            <div className="title">
-                              <span className="material-icons tree-icon">folder</span>
-                              {folder.name}
-                            </div>
-                            <div className="folder-count">
-                              <span className="badge">{folder.unreadCount}</span>
-                              <button
-                                className="btn-ghost icon-btn folder-trash-btn"
-                                aria-label={`Delete folder ${folder.name}`}
-                                title="Delete folder"
-                                onClick={(e) => { e.stopPropagation(); onDeleteFolder(folder.id); closeFlyout(); }}
-                                onMouseDown={(e) => e.stopPropagation()}
-                              >
-                                <span className="material-icons">delete</span>
-                              </button>
-                            </div>
-                          </div>
-                          <div className="tree-children">
-                            {folderFeeds.map((feed) => (
-                              <div
-                                key={feed.id}
-                                className={clsx('feed-row', 'tree-feed', selectedFeedId === feed.id && 'active', dragFeedId === feed.id && 'dragging')}
-                                onClick={() => { onSelectFeed(feed.id); closeFlyout(); }}
-                                draggable
-                                onDragStart={(e) => { setDragFeedId(feed.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', `${feed.id}`); }}
-                                onDragEnd={() => { setDragFeedId(null); setDropTarget(null); setFeedDropTargetId(null); }}
-                                onDragOver={allowDrop}
-                                onDragEnter={() => { if (dragFeedId !== null) setFeedDropTargetId(feed.id); }}
-                                onDragLeave={() => setFeedDropTargetId(null)}
-                                onDrop={(e) => { e.preventDefault(); if (dragFeedId !== null) handleFeedDropOnFeed(feed.id); }}
-                              >
-                                <div className="title">
-                                  {feedFavicon(feed.url) ? (
-                                    <img src={feedFavicon(feed.url)!} alt="" className="feed-favicon" />
-                                  ) : (
-                                    <span className="material-icons tree-icon">rss_feed</span>
-                                  )}
-                                  {feed.title}
-                                </div>
-                                <span className="badge">{feed.unreadCount}</span>
-                                <div className="actions" onClick={(e) => e.stopPropagation()} />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    const { feed } = node;
-                    return (
-                      <div
-                        key={feed.id}
-                        className={clsx('feed-row', 'tree-feed', selectedFeedId === feed.id && 'active', dragFeedId === feed.id && 'dragging', dropTarget === 'root' && 'drop-target-root', feedDropTargetId === feed.id && 'drop-target')}
-                        onClick={() => { onSelectFeed(feed.id); closeFlyout(); }}
-                        draggable
-                                onDragStart={(e) => { setDragFeedId(feed.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', `${feed.id}`); }}
-                        onDragEnd={() => { setDragFeedId(null); setDropTarget(null); setFeedDropTargetId(null); }}
-                        onDragOver={allowDrop}
-                        onDragEnter={() => { if (dragFeedId !== null) { setDropTarget('root'); setFeedDropTargetId(feed.id); } }}
-                        onDragLeave={() => { setDropTarget(null); setFeedDropTargetId(null); }}
-                        onDrop={(e) => { e.preventDefault(); if (dragFeedId !== null) handleFeedDropOnFeed(feed.id); }}
-                      >
-                        <div className="title">
-                          {feedFavicon(feed.url) ? (
-                            <img src={feedFavicon(feed.url)!} alt="" className="feed-favicon" />
-                          ) : (
-                            <span className="material-icons tree-icon">rss_feed</span>
-                          )}
-                          {feed.title}
-                        </div>
-                        <span className="badge">{feed.unreadCount}</span>
-                        <div className="actions" onClick={(e) => e.stopPropagation()} />
-                      </div>
-                    );
-                  })}
-                </div>
-            </div>
-          )}
-        </>
-      )}
-    </aside>
+              }}
+              onDragLeave={() => {
+                setDropTarget(null);
+                setFeedDropTargetId(null);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragFeedId !== null) handleFeedDropOnFeed(feed.id);
+              }}
+            >
+              {titleWithIcon(feedIcon(feed), feed.title)}
+              {countBadge(feed.unreadCount)}
+            </ListItemButton>
+          );
+        })}
+      </List>
+    </Box>
   );
 };

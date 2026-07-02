@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { Box, Chip, IconButton, Paper, Stack, Typography } from '@mui/material';
+import BookmarkIcon from '@mui/icons-material/Bookmark';
+import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
+import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
+import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import { Item, Tag } from '@shared/types';
-import clsx from 'clsx';
+import { kunaiLayout } from '../theme';
 
 const timeAgo = (iso: string | null) => {
   if (!iso) return 'unknown';
@@ -25,126 +30,171 @@ type Props = {
   onToggleSave: (item: Item) => void;
 };
 
-export const ItemList: React.FC<Props> = ({ items, expandedId, onExpand, onToggleRead, onOpenModal, onUpdateTags, savedIds, onToggleSave }) => {
-  const [drafts, setDrafts] = useState<Record<number, string>>({});
+const readIcon = (isRead?: boolean) => (isRead ? <RadioButtonUncheckedIcon /> : <RadioButtonCheckedIcon />);
+const savedIcon = (saved: boolean) => (saved ? <BookmarkIcon /> : <BookmarkBorderIcon />);
 
-  const saveTag = (item: Item) => {
-    const val = (drafts[item.id] || '').trim();
-    if (!val) return;
-    onUpdateTags(item, [val]);
-    setDrafts((prev) => ({ ...prev, [item.id]: '' }));
-  };
-
+export const ItemList: React.FC<Props> = ({ items, expandedId, onExpand, onToggleRead, onUpdateTags, savedIds, onToggleSave }) => {
   const removeTag = (item: Item, tag: Tag) => {
     onUpdateTags(item, undefined, [tag.id]);
   };
 
   return (
-    <div className="list">
+    <Stack spacing={1.25}>
       {items.map((item) => {
         const expanded = expandedId === item.id;
+        const saved = savedIds.has(item.id);
         return (
-          <div key={item.id} className={clsx('list-row', !item.isRead && 'unread')} onClick={() => onExpand(item.id)}>
-            <div className="list-row-main">
-              <button
-                className="icon-btn btn-ghost status-btn"
+          <Paper
+            key={item.id}
+            data-kunai-item="true"
+            onClick={() => onExpand(item.id)}
+            sx={{
+              bgcolor: 'var(--panel)',
+              border: '1px solid',
+              borderColor: !item.isRead ? 'rgba(56, 189, 248, 0.55)' : 'rgba(255, 255, 255, 0.06)',
+              borderRadius: 2,
+              color: 'var(--text)',
+              cursor: 'pointer',
+              overflow: 'hidden',
+              p: 1.5
+            }}
+          >
+            <Box
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: {
+                  xs: 'minmax(0, 1fr) auto',
+                  sm: 'auto auto minmax(110px, 150px) minmax(0, 1fr) auto'
+                },
+                gridTemplateAreas: {
+                  xs: '"feed time" "title title"',
+                  sm: '"read save feed title time"'
+                },
+                alignItems: 'center',
+                gap: { xs: 0.75, sm: 1.25 }
+              }}
+            >
+              <IconButton
+                aria-label={item.isRead ? 'Mark unread' : 'Mark read'}
                 title={item.isRead ? 'Mark unread' : 'Mark read'}
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleRead(item, !item.isRead);
                 }}
+                sx={{ gridArea: 'read', display: { xs: 'none', sm: 'inline-flex' }, width: 34, height: 34 }}
               >
-                <span className="material-icons">{item.isRead ? 'radio_button_unchecked' : 'radio_button_checked'}</span>
-              </button>
-              <button
-                className="icon-btn btn-ghost bookmark-btn"
-                title={savedIds.has(item.id) ? 'Remove from saved' : 'Save article'}
+                {readIcon(item.isRead)}
+              </IconButton>
+              <IconButton
+                aria-label={saved ? 'Remove from saved' : 'Save article'}
+                title={saved ? 'Remove from saved' : 'Save article'}
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleSave(item);
                 }}
+                sx={{ gridArea: 'save', display: { xs: 'none', sm: 'inline-flex' }, width: 34, height: 34 }}
               >
-                <span className="material-icons">{savedIds.has(item.id) ? 'bookmark' : 'bookmark_border'}</span>
-              </button>
-              <span className="row-feed" title={item.feedTitle || ''}>{item.feedTitle}</span>
-              <span className="row-title" title={item.title}>{item.title}</span>
-              <span className="row-time" title={item.publishedAt || ''}>{timeAgo(item.publishedAt)}</span>
-            </div>
+                {savedIcon(saved)}
+              </IconButton>
+              <Typography variant="body2" color="var(--muted)" noWrap title={item.feedTitle || ''} sx={{ gridArea: 'feed' }}>
+                {item.feedTitle}
+              </Typography>
+              <Typography fontWeight={800} noWrap title={item.title} sx={{ gridArea: 'title' }}>
+                {item.title}
+              </Typography>
+              <Typography variant="caption" color="var(--muted)" textAlign="right" title={item.publishedAt || ''} noWrap sx={{ gridArea: 'time' }}>
+                {timeAgo(item.publishedAt)}
+              </Typography>
+            </Box>
+
             {expanded && (
-              <div className="list-expanded" onClick={(e) => e.stopPropagation()}>
-                <div className="list-expanded-header">
-                  <div className="list-expanded-toolbar">
-                    <button
-                      className="icon-btn btn-ghost status-btn"
+              <Box
+                onClick={(e) => e.stopPropagation()}
+                sx={{
+                  maxWidth: kunaiLayout.modalContentWidth,
+                  width: '100%',
+                  mx: 'auto',
+                  mt: 1.5,
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 1.5,
+                  alignItems: 'flex-start'
+                }}
+              >
+                <Stack spacing={1} width="100%">
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <IconButton
+                      aria-label={item.isRead ? 'Mark unread' : 'Mark read'}
                       title={item.isRead ? 'Mark unread' : 'Mark read'}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleRead(item, !item.isRead);
-                      }}
+                      onClick={() => onToggleRead(item, !item.isRead)}
                     >
-                      <span className="material-icons">{item.isRead ? 'radio_button_unchecked' : 'radio_button_checked'}</span>
-                    </button>
-                    <button
-                      className="icon-btn btn-ghost bookmark-btn"
-                      title={savedIds.has(item.id) ? 'Remove from saved' : 'Save article'}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleSave(item);
-                      }}
+                      {readIcon(item.isRead)}
+                    </IconButton>
+                    <IconButton
+                      aria-label={saved ? 'Remove from saved' : 'Save article'}
+                      title={saved ? 'Remove from saved' : 'Save article'}
+                      onClick={() => onToggleSave(item)}
                     >
-                      <span className="material-icons">{savedIds.has(item.id) ? 'bookmark' : 'bookmark_border'}</span>
-                    </button>
-                  </div>
-                  <div className="modal-divider prominent" />
-                  <div className="list-expanded-title">
-                    <h3>
+                      {savedIcon(saved)}
+                    </IconButton>
+                  </Stack>
+                  <Box sx={{ height: 2, bgcolor: 'rgba(56, 189, 248, 0.45)', boxShadow: '0 0 0 1px rgba(56, 189, 248, 0.3)' }} />
+                  <Box>
+                    <Typography variant="h6" fontWeight={800}>
                       <a href={item.link} target="_blank" rel="noreferrer">
                         {item.title}
                       </a>
-                    </h3>
-                    <div className="muted" style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <span>{item.feedTitle}</span>
-                      <span>·</span>
-                      <span>{timeAgo(item.publishedAt)}</span>
-                    </div>
-                  </div>
-                </div>
+                    </Typography>
+                    <Stack direction="row" spacing={0.75} alignItems="center" useFlexGap flexWrap="wrap">
+                      <Typography variant="body2" color="var(--muted)">
+                        {item.feedTitle}
+                      </Typography>
+                      <Typography variant="body2" color="var(--muted)">
+                        ·
+                      </Typography>
+                      <Typography variant="body2" color="var(--muted)">
+                        {timeAgo(item.publishedAt)}
+                      </Typography>
+                    </Stack>
+                  </Box>
+                </Stack>
+
                 {!item.readableContent && item.imageUrl && (
-                  <img src={item.imageUrl} alt="" style={{ width: 180, height: 'auto', maxHeight: 200, objectFit: 'cover', borderRadius: 12 }} />
+                  <Box
+                    component="img"
+                    src={item.imageUrl}
+                    alt=""
+                    sx={{ width: 180, height: 'auto', maxHeight: 200, objectFit: 'cover', borderRadius: 2 }}
+                  />
                 )}
-                <div style={{ flex: 1, minWidth: 280 }}>
+                <Box sx={{ flex: 1, minWidth: 280, maxWidth: kunaiLayout.modalContentWidth, overflowWrap: 'break-word' }}>
                   {item.readableContent ? (
-                    <div className="article-body" dangerouslySetInnerHTML={{ __html: item.readableContent }} />
+                    <Box className="article-body" dangerouslySetInnerHTML={{ __html: item.readableContent }} />
                   ) : item.content ? (
-                    <div className="article-body" dangerouslySetInnerHTML={{ __html: item.content }} />
+                    <Box className="article-body" dangerouslySetInnerHTML={{ __html: item.content }} />
                   ) : (
-                    <p className="snippet">{item.snippet || 'No snippet available.'}</p>
+                    <Typography color="var(--muted)">{item.snippet || 'No snippet available.'}</Typography>
                   )}
                   {item.tags && item.tags.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                    <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
                       {item.tags.map((tag) => (
-                        <span key={`${item.id}-${tag.id}`} className="tag-pill">
-                          {tag.name}
-                          <button
-                            className="btn-ghost"
-                            style={{ padding: '2px 6px', marginLeft: 6 }}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeTag(item, tag);
-                            }}
-                          >
-                            ×
-                          </button>
-                        </span>
+                        <Chip
+                          key={`${item.id}-${tag.id}`}
+                          label={tag.name}
+                          size="small"
+                          variant="outlined"
+                          onDelete={() => removeTag(item, tag)}
+                          sx={{ bgcolor: 'rgba(255, 255, 255, 0.05)' }}
+                        />
                       ))}
-                    </div>
+                    </Stack>
                   )}
-                </div>
-              </div>
+                </Box>
+              </Box>
             )}
-          </div>
+          </Paper>
         );
       })}
-    </div>
+    </Stack>
   );
 };

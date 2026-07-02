@@ -1,6 +1,7 @@
-const CACHE_NAME = 'kunai-static-v1';
+const CACHE_NAME = 'kunai-static-v2';
 const OFFLINE_URLS = [
   '/manifest.webmanifest',
+  '/favicon.png',
   '/icon-180.png',
   '/icon-192.png',
   '/icon-512.png'

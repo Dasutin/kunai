@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Alert, Button, Dialog, DialogActions, DialogContent, DialogTitle, Stack, TextField } from '@mui/material';
 
 type Props = {
   onSubmit: (url: string, title?: string) => Promise<void>;
@@ -25,21 +26,23 @@ export const AddFeedModal: React.FC<Props> = ({ onSubmit, onClose }) => {
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <header>
-          <h3 style={{ margin: 0 }}>Add RSS feed</h3>
-          <button className="btn-ghost" onClick={onClose}>
-            Close
-          </button>
-        </header>
-        <input className="input" placeholder="Feed URL" value={url} onChange={(e) => setUrl(e.target.value)} />
-        <input className="input" placeholder="Optional title" value={title} onChange={(e) => setTitle(e.target.value)} />
-        {error && <div className="muted" style={{ color: 'var(--danger)' }}>{error}</div>}
-        <button className="btn" onClick={handle} disabled={loading}>
+    <Dialog open onClose={loading ? undefined : onClose} fullWidth maxWidth="sm">
+      <DialogTitle>Add RSS feed</DialogTitle>
+      <DialogContent>
+        <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+          <TextField label="Feed URL" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus fullWidth />
+          <TextField label="Optional title" value={title} onChange={(e) => setTitle(e.target.value)} fullWidth />
+          {error && <Alert severity="error">{error}</Alert>}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button variant="text" onClick={onClose} disabled={loading}>
+          Close
+        </Button>
+        <Button variant="contained" onClick={handle} disabled={loading}>
           {loading ? 'Adding...' : 'Add feed'}
-        </button>
-      </div>
-    </div>
+        </Button>
+      </DialogActions>
+    </Dialog>
   );
 };

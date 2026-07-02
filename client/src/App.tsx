@@ -1,4 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Box, Button, Chip, Fab, Stack, Tooltip, Typography } from '@mui/material';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { api } from './api';
 import { FeedWithUnread, Folder, Item, Settings, Tag } from '@shared/types';
 import { usePersistedState } from './hooks/usePersistedState';
@@ -11,9 +14,9 @@ import { ItemModal } from './components/ItemModal';
 import { AddFeedModal } from './components/AddFeedModal';
 import { SettingsPage } from './components/SettingsPage';
 import { MiniSidebar } from './components/MiniSidebar';
-import clsx from 'clsx';
 import { CreateFolderModal } from './components/CreateFolderModal';
 import { DeleteFolderModal } from './components/DeleteFolderModal';
+import { kunaiLayout } from './theme';
 
 type FolderWithUnread = Folder & { unreadCount: number };
 
@@ -81,7 +84,6 @@ const App: React.FC = () => {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [appliedDefaults, setAppliedDefaults] = useState(false);
   const [contentLoadingId, setContentLoadingId] = useState<number | null>(null);
-  const headerCondensed = false;
   const [isMobile, setIsMobile] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [emptyQuote, setEmptyQuote] = useState('');
@@ -343,6 +345,40 @@ const App: React.FC = () => {
     }
   };
 
+  const handleMarkOlderRead = async (days: number) => {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const isOlder = (item: Item) => !item.publishedAt || item.publishedAt <= cutoff;
+
+    if (savedView) {
+      const targets = savedItems.filter((it) => !it.isRead && isOlder(it));
+      if (targets.length === 0) return;
+      setSavedItems((prev) => prev.map((it) => (isOlder(it) ? { ...it, isRead: true } : it)));
+      setItems((prev) => prev.map((it) => (isOlder(it) ? { ...it, isRead: true } : it)));
+      try {
+        await Promise.all(targets.map((item) => api.markRead(item.id, { isRead: true })));
+        await handleRefresh();
+      } catch (err: any) {
+        setError(err?.message || 'Failed to mark older articles read');
+        await handleRefresh();
+      }
+      return;
+    }
+
+    try {
+      const scope = selectedFeedId ? 'feed' : selectedFolderId ? 'folder' : 'newsfeed';
+      await api.markAllRead({
+        scope,
+        feedId: selectedFeedId || undefined,
+        folderId: selectedFolderId || undefined,
+        beforePublishedAt: cutoff
+      });
+      setItems((prev) => prev.map((it) => (isOlder(it) ? { ...it, isRead: true } : it)));
+      await handleRefresh();
+    } catch (err: any) {
+      setError(err?.message || 'Failed to mark older articles read');
+    }
+  };
+
   const handleRefresh = useCallback(async () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -557,16 +593,51 @@ const App: React.FC = () => {
     setMobileSidebarOpen(false);
   };
 
+  const scrollByArticleStep = useCallback((direction: 'up' | 'down') => {
+    const itemNodes = Array.from(document.querySelectorAll<HTMLElement>('[data-kunai-item="true"]'));
+    const header = document.querySelector<HTMLElement>('main header');
+    const headerHeight = header?.getBoundingClientRect().height ?? 0;
+    const topOffset = headerHeight + 12;
+    const currentTop = window.scrollY + topOffset;
+    const tolerance = viewMode === 'card' ? 12 : 8;
+    const itemTops = Array.from(
+      new Set(
+        itemNodes
+          .map((node) => Math.round(node.getBoundingClientRect().top + window.scrollY))
+          .filter((top) => Number.isFinite(top))
+      )
+    ).sort((a, b) => a - b);
+
+    const fallbackTop =
+      direction === 'down'
+        ? Math.min(document.documentElement.scrollHeight - window.innerHeight, window.scrollY + window.innerHeight * 0.75)
+        : Math.max(0, window.scrollY - window.innerHeight * 0.75);
+    const targetTop =
+      direction === 'down'
+        ? itemTops.find((top) => top > currentTop + tolerance)
+        : [...itemTops].reverse().find((top) => top < currentTop - tolerance);
+
+    window.scrollTo({
+      top: targetTop === undefined ? fallbackTop : Math.max(0, targetTop - topOffset),
+      behavior: 'smooth'
+    });
+  }, [viewMode]);
+
   return (
-    <div className={clsx(
-      'app-shell',
-      sidebarCollapsed && 'sidebar-collapsed',
-      isMobile && 'is-mobile',
-      isMobile && mobileSidebarOpen && 'sidebar-open',
-      !sidebarPinned && !isMobile && 'sidebar-unpinned',
-      sidebarPeek && 'sidebar-peek',
-      settingsView && 'settings-view'
-    )}>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: {
+          xs: '1fr',
+          md: settingsView
+            ? `${kunaiLayout.miniSidebarWidth}px minmax(0, 1fr)`
+            : sidebarPinned
+              ? `${kunaiLayout.miniSidebarWidth}px ${kunaiLayout.sidebarWidth}px minmax(0, 1fr)`
+              : `${kunaiLayout.miniSidebarWidth}px minmax(0, 1fr)`
+        },
+        minHeight: '100vh'
+      }}
+    >
       <MiniSidebar
         onSelectHome={goHome}
         onSelectSaved={goSaved}
@@ -610,13 +681,40 @@ const App: React.FC = () => {
           onClosePeek={() => setSidebarPeek(false)}
           onPeek={handleSidebarPeekHover}
           isMobile={isMobile}
+          mobileOpen={mobileSidebarOpen}
         />
       )}
-      {isMobile && mobileSidebarOpen && <div className="sidebar-backdrop" onClick={() => setMobileSidebarOpen(false)} />}
-      <main className="main">
+      {isMobile && mobileSidebarOpen && (
+        <Box
+          onClick={() => setMobileSidebarOpen(false)}
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            bgcolor: 'rgba(0, 0, 0, 0.55)',
+            zIndex: 20
+          }}
+        />
+      )}
+      <Box
+        component="main"
+        sx={{
+          px: settingsView ? { xs: 2, md: 2.5 } : { xs: 1.75, md: 3.25 },
+          py: settingsView ? { xs: 2, md: 2.5 } : { xs: 2, md: 2.5 },
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          minWidth: 0,
+          width: '100%',
+          maxWidth: settingsView ? 1120 : 'none',
+          mx: settingsView ? 'auto' : 0,
+          overflowX: 'clip'
+        }}
+      >
         <HeaderBar
           viewMode={viewMode}
           onViewChange={setViewMode}
+          sort={sort}
+          onSortChange={setSort}
           unreadOnly={unreadOnly}
           unreadCount={unreadCount}
           onUnreadChange={setUnreadOnly}
@@ -624,8 +722,9 @@ const App: React.FC = () => {
           onSearch={setSearch}
           onRefresh={handleRefresh}
           onMarkAllRead={handleMarkAll}
+          onMarkOlderRead={handleMarkOlderRead}
           scopeLabel={settingsView ? 'Settings' : scopeLabel(selectedFeed, selectedFolderId, folders, savedView)}
-          condensed={headerCondensed}
+          condensed={!settingsView}
           isMobile={isMobile}
           onToggleSidebar={() => {
             if (sidebarCollapsed) {
@@ -646,30 +745,43 @@ const App: React.FC = () => {
         ) : (
           <>
             {tags.length > 0 && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                <span className="muted">Filter by tag:</span>
+              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" alignItems="center">
+                <Typography color="var(--muted)">Filter by tag:</Typography>
                 {tags.map((tag) => (
-                  <button
+                  <Chip
                     key={tag.id}
-                    className={clsx('toggle', selectedTagIds.includes(tag.id) && 'active')}
+                    label={`${tag.name}${typeof tag.usageCount === 'number' ? ` (${tag.usageCount})` : ''}`}
+                    variant={selectedTagIds.includes(tag.id) ? 'filled' : 'outlined'}
+                    color={selectedTagIds.includes(tag.id) ? 'primary' : 'default'}
+                    clickable
                     onClick={() => toggleTagFilter(tag.id)}
-                  >
-                    {tag.name}
-                    {typeof tag.usageCount === 'number' ? ` (${tag.usageCount})` : ''}
-                  </button>
+                    sx={{
+                      bgcolor: selectedTagIds.includes(tag.id) ? 'rgba(56, 189, 248, 0.16)' : 'var(--card-bg-soft)',
+                      color: 'var(--text)',
+                      borderColor: selectedTagIds.includes(tag.id) ? 'rgba(56, 189, 248, 0.45)' : 'var(--card-border)'
+                    }}
+                  />
                 ))}
                 {selectedTagIds.length > 0 && (
-                  <button className="btn-ghost" onClick={clearTagFilters}>
+                  <Button variant="text" size="small" onClick={clearTagFilters}>
                     Clear tags
-                  </button>
+                  </Button>
                 )}
-              </div>
+              </Stack>
             )}
 
-            {error && <div className="muted" style={{ color: 'var(--danger)' }}>{error}</div>}
+            {error && (
+              <Alert severity="error" variant="outlined" sx={{ borderColor: 'var(--danger)', color: 'var(--text)' }}>
+                {error}
+              </Alert>
+            )}
 
             {displayItems.length === 0 ? (
-              <div className="empty-state">{emptyQuote || "You've read everything"}</div>
+              <Box sx={{ minHeight: '50vh', display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+                <Typography color="var(--muted)" fontWeight={800}>
+                  {emptyQuote || "You've read everything"}
+                </Typography>
+              </Box>
             ) : (
               <>
                 {viewMode === 'list' && (
@@ -706,7 +818,72 @@ const App: React.FC = () => {
             )}
           </>
         )}
-      </main>
+      </Box>
+
+      {!settingsView && displayItems.length > 0 && (
+        <Stack
+          spacing={1}
+          sx={{
+            position: 'fixed',
+            right: { xs: 16, md: 24 },
+            bottom: { xs: 18, md: 24 },
+            zIndex: 35
+          }}
+        >
+          <Tooltip title={viewMode === 'card' ? 'Previous row' : 'Previous article'} placement="left">
+            <Fab
+              size="small"
+              aria-label={viewMode === 'card' ? 'Move up one row' : 'Move up one article'}
+              onClick={() => scrollByArticleStep('up')}
+              sx={{
+                width: 48,
+                height: 48,
+                minHeight: 48,
+                minWidth: 48,
+                p: 0,
+                bgcolor: 'var(--panel-2)',
+                color: 'var(--muted)',
+                border: 0,
+                boxShadow: '0 16px 34px rgba(0, 0, 0, 0.55)',
+                '& .MuiSvgIcon-root': { fontSize: 34 },
+                '&:hover': {
+                  bgcolor: 'var(--surface-raised)',
+                  color: 'var(--text)',
+                  boxShadow: '0 18px 38px rgba(0, 0, 0, 0.62)'
+                }
+              }}
+            >
+              <KeyboardArrowUpIcon />
+            </Fab>
+          </Tooltip>
+          <Tooltip title={viewMode === 'card' ? 'Next row' : 'Next article'} placement="left">
+            <Fab
+              size="small"
+              aria-label={viewMode === 'card' ? 'Move down one row' : 'Move down one article'}
+              onClick={() => scrollByArticleStep('down')}
+              sx={{
+                width: 48,
+                height: 48,
+                minHeight: 48,
+                minWidth: 48,
+                p: 0,
+                bgcolor: 'var(--panel-2)',
+                color: 'var(--muted)',
+                border: 0,
+                boxShadow: '0 16px 34px rgba(0, 0, 0, 0.55)',
+                '& .MuiSvgIcon-root': { fontSize: 34 },
+                '&:hover': {
+                  bgcolor: 'var(--surface-raised)',
+                  color: 'var(--text)',
+                  boxShadow: '0 18px 38px rgba(0, 0, 0, 0.62)'
+                }
+              }}
+            >
+              <KeyboardArrowDownIcon />
+            </Fab>
+          </Tooltip>
+        </Stack>
+      )}
 
       {modalItem && (
         <ItemModal
@@ -735,7 +912,7 @@ const App: React.FC = () => {
           }}
         />
       )}
-    </div>
+    </Box>
   );
 };
 
