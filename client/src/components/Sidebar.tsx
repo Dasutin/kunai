@@ -291,8 +291,8 @@ export const Sidebar: React.FC<Props> = ({
         </Typography>
         <Stack direction="row" alignItems="center" spacing={0.5} sx={{ justifySelf: 'end' }}>
           {isMobile && (
-            <Tooltip title="Settings">
-              <IconButton aria-label="Settings" size="small" onClick={onOpenSettings}>
+            <Tooltip title="Preferences">
+              <IconButton aria-label="Preferences" size="small" onClick={onOpenSettings}>
                 <SettingsIcon fontSize="small" />
               </IconButton>
             </Tooltip>

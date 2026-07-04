@@ -96,6 +96,11 @@ export const HeaderBar: React.FC<Props> = ({
     onUnreadChange(val);
   };
 
+  const selectFilter = (val: boolean) => {
+    onUnreadChange(val);
+    setMoreAnchor(null);
+  };
+
   const selectView = (mode: ViewMode) => {
     onViewChange(mode);
     setMoreAnchor(null);
@@ -127,7 +132,7 @@ export const HeaderBar: React.FC<Props> = ({
         <Stack direction="row" alignItems="center" gap={2} sx={{ width: '100%' }}>
           <Box minWidth={0}>
             <Typography variant="h5" fontWeight={800}>
-              Settings
+              Preferences
             </Typography>
             <Typography variant="body2" color="var(--muted)">
               Manage preferences and imports
@@ -145,7 +150,8 @@ export const HeaderBar: React.FC<Props> = ({
     <Paper
       component="header"
       sx={{
-        p: condensed ? 1.25 : 2,
+        p: condensed ? { xs: 1, sm: 1.25 } : { xs: 1.25, sm: 2 },
+        pt: condensed ? { xs: 'calc(env(safe-area-inset-top, 0px) + 8px)', sm: 1.25 } : { xs: 'calc(env(safe-area-inset-top, 0px) + 10px)', sm: 2 },
         mx: { xs: -1.75, md: -3.25 },
         mt: { xs: -2, md: -2.5 },
         width: { xs: 'calc(100% + 28px)', md: 'calc(100% + 52px)' },
@@ -212,6 +218,7 @@ export const HeaderBar: React.FC<Props> = ({
             }}
             aria-label="Article filter"
             sx={{
+              display: { xs: 'none', sm: 'inline-flex' },
               ml: condensed ? 2 : 0,
               flexShrink: 0,
               p: 0.25,
@@ -284,11 +291,29 @@ export const HeaderBar: React.FC<Props> = ({
                 }
               }}
             />
+            <Tooltip title="Mark all as read">
+              <IconButton
+                aria-label="Mark all as read"
+                onClick={onMarkAllRead}
+                sx={{
+                  display: { xs: 'inline-flex', sm: 'none' },
+                  width: 40,
+                  height: 40,
+                  color: 'var(--muted)',
+                  border: '1px solid var(--card-border)',
+                  borderRadius: '10px',
+                  bgcolor: 'rgba(255, 255, 255, 0.04)'
+                }}
+              >
+                <DoneAllIcon />
+              </IconButton>
+            </Tooltip>
             <ButtonGroup
               variant="outlined"
               size="small"
               aria-label="Mark read actions"
               sx={{
+                display: { xs: 'none', sm: 'inline-flex' },
                 flexShrink: 0,
                 bgcolor: 'rgba(255, 255, 255, 0.04)',
                 borderRadius: '10px',
@@ -306,7 +331,7 @@ export const HeaderBar: React.FC<Props> = ({
                 aria-label="Mark as read options"
                 aria-expanded={Boolean(markAnchor)}
                 onClick={(e) => setMarkAnchor(e.currentTarget)}
-                sx={{ minWidth: 34, px: 0.5 }}
+                sx={{ display: { xs: 'none', sm: 'inline-flex' }, minWidth: 34, px: 0.5 }}
               >
                 <ExpandMoreIcon fontSize="small" />
               </Button>
@@ -332,6 +357,21 @@ export const HeaderBar: React.FC<Props> = ({
               </IconButton>
             </Tooltip>
             <Menu anchorEl={moreAnchor} open={Boolean(moreAnchor)} onClose={() => setMoreAnchor(null)}>
+              <ListSubheader
+                disableSticky
+                sx={{ display: { xs: 'block', sm: 'none' }, bgcolor: 'transparent', color: 'var(--muted)', lineHeight: '32px' }}
+              >
+                Filtering
+              </ListSubheader>
+              <MenuItem sx={{ display: { xs: 'flex', sm: 'none' } }} selected={!unreadOnly} onClick={() => selectFilter(false)}>
+                <Radio checked={!unreadOnly} size="small" sx={{ p: 0, mr: 1 }} />
+                <ListItemText>All Articles</ListItemText>
+              </MenuItem>
+              <MenuItem sx={{ display: { xs: 'flex', sm: 'none' } }} selected={unreadOnly} onClick={() => selectFilter(true)}>
+                <Radio checked={unreadOnly} size="small" sx={{ p: 0, mr: 1 }} />
+                <ListItemText>Unread ({unreadCount})</ListItemText>
+              </MenuItem>
+              <Divider sx={{ display: { xs: 'block', sm: 'none' }, my: 0.5, borderColor: 'var(--card-border)' }} />
               <ListSubheader disableSticky sx={{ bgcolor: 'transparent', color: 'var(--muted)', lineHeight: '32px' }}>
                 Layout
               </ListSubheader>

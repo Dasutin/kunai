@@ -51,6 +51,7 @@ export const ItemMagazine: React.FC<Props> = ({ items, onOpen, onToggleRead, sav
             color: 'var(--text)',
             cursor: 'pointer',
             overflow: 'hidden',
+            alignItems: 'stretch',
             opacity: item.isRead ? 0.6 : 1,
             filter: item.isRead ? 'grayscale(0.4)' : 'none'
           }}
@@ -62,13 +63,14 @@ export const ItemMagazine: React.FC<Props> = ({ items, onOpen, onToggleRead, sav
               alt=""
               sx={{
                 width: '100%',
-                height: { xs: 120, sm: 150, md: 180, lg: 220 },
+                height: { xs: '100%', sm: '100%', md: 180, lg: 220 },
+                minHeight: { xs: 120, sm: 150, md: 180, lg: 220 },
                 objectFit: 'cover',
                 bgcolor: 'var(--panel-2)'
               }}
             />
           ) : (
-            <Box sx={{ width: '100%', height: { xs: 120, sm: 150, md: 180, lg: 220 }, bgcolor: 'rgba(255, 255, 255, 0.04)' }} />
+            <Box sx={{ width: '100%', height: { xs: '100%', sm: '100%', md: 180, lg: 220 }, minHeight: { xs: 120, sm: 150, md: 180, lg: 220 }, bgcolor: 'rgba(255, 255, 255, 0.04)' }} />
           )}
           <Box
             sx={{
@@ -87,17 +89,18 @@ export const ItemMagazine: React.FC<Props> = ({ items, onOpen, onToggleRead, sav
                 display: '-webkit-box',
                 WebkitLineClamp: 3,
                 WebkitBoxOrient: 'vertical',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                color: '#c1c4c7'
               }}
             >
               {item.title}
             </Typography>
-            <Typography variant="body2" color="var(--muted)" sx={{ display: { xs: 'none', sm: 'block' } }}>
+            <Typography variant="body2" sx={{ display: { xs: 'none', sm: 'none' }, color: 'var(--muted)', fontSize: 12, lineHeight: 1.35 }}>
               {item.feedTitle}
             </Typography>
             <Typography
-              color="var(--muted)"
               sx={{
+                color: '#c1c4c7',
                 fontSize: { xs: 13, sm: 14, md: 15 },
                 lineHeight: { xs: 1.35, sm: 1.4, md: 1.5 },
                 display: '-webkit-box',
@@ -110,17 +113,17 @@ export const ItemMagazine: React.FC<Props> = ({ items, onOpen, onToggleRead, sav
             </Typography>
             <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1.25} sx={{ mt: 'auto' }}>
               <Stack direction="row" spacing={0.75} alignItems="center" minWidth={0}>
-                <Typography variant="caption" color="var(--muted)" noWrap>
+                <Typography variant="caption" noWrap sx={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.35 }}>
                   {item.feedTitle}
                 </Typography>
-                <Typography variant="caption" color="var(--muted)">
+                <Typography variant="caption" sx={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.35 }}>
                   ·
                 </Typography>
-                <Typography variant="caption" color="var(--muted)" noWrap>
+                <Typography variant="caption" noWrap sx={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.35 }}>
                   {timeAgo(item.publishedAt)}
                 </Typography>
               </Stack>
-              <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'none', sm: 'flex' } }}>
+              <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'none', sm: 'flex' }, ml: 'auto', justifyContent: 'flex-end', flexShrink: 0 }}>
                 <IconButton
                   aria-label={saved ? 'Remove from saved' : 'Save article'}
                   title={saved ? 'Remove from saved' : 'Save article'}

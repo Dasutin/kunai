@@ -80,14 +80,14 @@ export const MiniSidebar: React.FC<MiniSidebarProps> = ({
         gap: 1.5,
         px: 1,
         py: 1.5,
-        bgcolor: 'var(--surface-raised)',
+        bgcolor: '#000000',
         backdropFilter: 'blur(12px)',
         borderRight: '1px solid var(--card-border)',
         ':root[data-theme="dark"] &': {
-          bgcolor: 'var(--surface-raised)'
+          bgcolor: '#000000'
         },
         ':root[data-theme="light"] &': {
-          bgcolor: 'var(--surface-raised)'
+          bgcolor: '#000000'
         }
       }}
     >
@@ -120,7 +120,7 @@ export const MiniSidebar: React.FC<MiniSidebarProps> = ({
         </RailButton>
       )}
       <Box sx={{ flex: 1 }} />
-      <RailButton title="Settings" onClick={onSettings}>
+      <RailButton title="Preferences" onClick={onSettings}>
         <SettingsIcon />
       </RailButton>
       <RailButton title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar'} onClick={onTogglePin}>

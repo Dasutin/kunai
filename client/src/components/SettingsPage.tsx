@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Avatar,
   Box,
   Button,
+  Divider,
   Dialog,
   DialogActions,
   DialogContent,
@@ -12,6 +14,9 @@ import {
   FormControlLabel,
   IconButton,
   InputLabel,
+  ListItemButton,
+  ListItemIcon,
+  ListItemText,
   MenuItem,
   Paper,
   Select,
@@ -28,29 +33,40 @@ import {
   TextField,
   Typography
 } from '@mui/material';
+import ArticleIcon from '@mui/icons-material/Article';
+import AddIcon from '@mui/icons-material/Add';
+import CloseIcon from '@mui/icons-material/Close';
 import DeleteIcon from '@mui/icons-material/Delete';
 import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
+import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
+import SettingsIcon from '@mui/icons-material/Settings';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { api } from '../api';
-import type { FeedWithUnread, Settings } from '@shared/types';
+import type { FeedWithUnread, Folder, Settings, Tag } from '@shared/types';
 
-type TabKey = 'General' | 'OPML' | 'Content';
+type PreferencePage = 'Settings' | 'Content';
+type SettingsTabKey = 'General' | 'OPML';
+type ContentTabKey = 'Feeds' | 'Folders' | 'Tags';
+type FolderWithUnread = Folder & { unreadCount: number };
 
-const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+const Section: React.FC<{ title?: string; children: React.ReactNode }> = ({ title, children }) => (
   <Paper
     component="section"
     sx={{
-      border: '1px solid var(--card-border)',
-      borderRadius: 2,
+      border: 0,
+      borderRadius: 0,
       p: 1.75,
-      bgcolor: 'var(--card-bg-soft)'
+      bgcolor: 'transparent',
+      boxShadow: 'none'
     }}
   >
     <Stack spacing={1.25}>
-      <Typography variant="h6" fontWeight={800}>
-        {title}
-      </Typography>
+      {title && (
+        <Typography variant="h6" fontWeight={800}>
+          {title}
+        </Typography>
+      )}
       {children}
     </Stack>
   </Paper>
@@ -72,10 +88,27 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
   const [message, setMessage] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabKey>('General');
+  const [activePage, setActivePage] = useState<PreferencePage>('Settings');
+  const [settingsTab, setSettingsTab] = useState<SettingsTabKey>('General');
+  const [contentTab, setContentTab] = useState<ContentTabKey>('Feeds');
   const [feeds, setFeeds] = useState<FeedWithUnread[]>([]);
+  const [folders, setFolders] = useState<FolderWithUnread[]>([]);
   const [feedsLoading, setFeedsLoading] = useState(false);
   const [feedsError, setFeedsError] = useState<string | null>(null);
+  const [foldersLoading, setFoldersLoading] = useState(false);
+  const [foldersError, setFoldersError] = useState<string | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsError, setTagsError] = useState<string | null>(null);
+  const [tagName, setTagName] = useState('');
+  const [tagSaving, setTagSaving] = useState(false);
+  const [tagDeletingId, setTagDeletingId] = useState<number | null>(null);
+  const [folderModalOpen, setFolderModalOpen] = useState(false);
+  const [folderEditing, setFolderEditing] = useState<FolderWithUnread | null>(null);
+  const [folderName, setFolderName] = useState('');
+  const [folderFeedIds, setFolderFeedIds] = useState<number[]>([]);
+  const [folderSaving, setFolderSaving] = useState(false);
+  const [folderDeletingId, setFolderDeletingId] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<FeedWithUnread | null>(null);
   const [editName, setEditName] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
@@ -99,6 +132,32 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
     }
   };
 
+  const loadFolders = async () => {
+    setFoldersLoading(true);
+    setFoldersError(null);
+    try {
+      const data = await api.getFolders();
+      setFolders(data);
+    } catch (err: any) {
+      setFoldersError(err?.message || 'Failed to load folders');
+    } finally {
+      setFoldersLoading(false);
+    }
+  };
+
+  const loadTags = async () => {
+    setTagsLoading(true);
+    setTagsError(null);
+    try {
+      const data = await api.getTags();
+      setTags(data);
+    } catch (err: any) {
+      setTagsError(err?.message || 'Failed to load tags');
+    } finally {
+      setTagsLoading(false);
+    }
+  };
+
   useEffect(() => {
     api
       .getSettings()
@@ -111,6 +170,8 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
 
   useEffect(() => {
     loadFeeds();
+    loadFolders();
+    loadTags();
   }, []);
 
   useEffect(() => {
@@ -207,6 +268,98 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
   };
 
   const sortedFeeds = useMemo(() => [...feeds].sort((a, b) => (a.title || '').localeCompare(b.title || '', undefined, { sensitivity: 'base' })), [feeds]);
+  const sortedFolders = useMemo(() => [...folders].sort((a, b) => (a.position || 0) - (b.position || 0) || a.name.localeCompare(b.name)), [folders]);
+  const sortedTags = useMemo(() => [...tags].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })), [tags]);
+  const selectedFolderFeeds = useMemo(() => sortedFeeds.filter((feed) => folderFeedIds.includes(feed.id)), [folderFeedIds, sortedFeeds]);
+
+  const openFolderModal = (folder?: FolderWithUnread) => {
+    setFolderEditing(folder || null);
+    setFolderName(folder?.name || '');
+    setFolderFeedIds(folder ? feeds.filter((feed) => feed.folderId === folder.id).map((feed) => feed.id) : []);
+    setFolderModalOpen(true);
+    setFoldersError(null);
+  };
+
+  const closeFolderModal = () => {
+    if (folderSaving) return;
+    setFolderModalOpen(false);
+    setFolderEditing(null);
+    setFolderName('');
+    setFolderFeedIds([]);
+  };
+
+  const saveFolder = async () => {
+    const name = folderName.trim();
+    if (!name) {
+      setFoldersError('Folder name is required');
+      return;
+    }
+    setFolderSaving(true);
+    setFoldersError(null);
+    try {
+      const folderId = folderEditing ? folderEditing.id : (await api.createFolder(name)).id;
+      if (folderEditing) {
+        await api.updateFolder(folderEditing.id, { name });
+      }
+      const currentIds = folderEditing ? feeds.filter((feed) => feed.folderId === folderEditing.id).map((feed) => feed.id) : [];
+      const selected = new Set(folderFeedIds);
+      const toAdd = folderFeedIds.filter((id) => !currentIds.includes(id));
+      const toRemove = currentIds.filter((id) => !selected.has(id));
+      if (toAdd.length > 0) await api.moveFeeds(toAdd, folderId);
+      if (toRemove.length > 0) await api.moveFeeds(toRemove, null);
+      await Promise.all([loadFeeds(), loadFolders()]);
+      closeFolderModal();
+    } catch (err: any) {
+      setFoldersError(err?.message || 'Failed to save folder');
+    } finally {
+      setFolderSaving(false);
+    }
+  };
+
+  const deleteFolder = async (folder: FolderWithUnread) => {
+    setFolderDeletingId(folder.id);
+    setFoldersError(null);
+    try {
+      await api.deleteFolder(folder.id);
+      await Promise.all([loadFeeds(), loadFolders()]);
+    } catch (err: any) {
+      setFoldersError(err?.message || 'Failed to delete folder');
+    } finally {
+      setFolderDeletingId(null);
+    }
+  };
+
+  const createTag = async () => {
+    const name = tagName.trim();
+    if (!name) {
+      setTagsError('Tag name is required');
+      return;
+    }
+    setTagSaving(true);
+    setTagsError(null);
+    try {
+      await api.createTag(name);
+      setTagName('');
+      await loadTags();
+    } catch (err: any) {
+      setTagsError(err?.message || 'Failed to create tag');
+    } finally {
+      setTagSaving(false);
+    }
+  };
+
+  const deleteTag = async (tag: Tag) => {
+    setTagDeletingId(tag.id);
+    setTagsError(null);
+    try {
+      await api.deleteTag(tag.id);
+      await loadTags();
+    } catch (err: any) {
+      setTagsError(err?.message || 'Failed to delete tag');
+    } finally {
+      setTagDeletingId(null);
+    }
+  };
 
   if (loading) {
     return (
@@ -216,190 +369,556 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
     );
   }
 
-  return (
-    <Stack spacing={1.75} sx={{ width: '100%', maxWidth: 960, mx: 'auto' }}>
-      <Stack spacing={0.5}>
-        <Typography variant="h5" fontWeight={800}>
-          {activeTab}
-        </Typography>
-        {message && <Typography color="var(--muted)">{message}</Typography>}
-      </Stack>
+  const navItems: Array<{ page: PreferencePage; label: string; icon: React.ReactNode }> = [
+    { page: 'Settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
+    { page: 'Content', label: 'Content', icon: <ArticleIcon fontSize="small" /> }
+  ];
 
-      <Tabs
-        value={activeTab}
-        onChange={(_, value) => setActiveTab(value)}
-        variant="scrollable"
-        scrollButtons="auto"
+  return (
+    <Box sx={{ width: '100%', bgcolor: '#16191c', minHeight: '100vh' }}>
+      <Box
         sx={{
-          minHeight: 44,
-          border: '1px solid var(--card-border)',
-          borderRadius: 2,
-          width: 'fit-content',
-          maxWidth: '100%',
-          bgcolor: 'var(--card-bg-soft)',
-          '& .MuiTab-root': { minHeight: 42, color: 'var(--muted)', fontWeight: 700 },
-          '& .Mui-selected': { color: 'var(--text)' }
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '208px minmax(0, 1fr)' },
+          minHeight: '100vh',
+          alignItems: 'stretch',
+          bgcolor: '#16191c'
         }}
       >
-        <Tab label="General" value="General" />
-        <Tab label="Content" value="Content" />
-        <Tab label="OPML" value="OPML" />
-      </Tabs>
-
-      {activeTab === 'General' && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(260px, 1fr))' }, gap: 1.5 }}>
-          <Section title="Preferences">
-            <Stack spacing={1.5}>
-              <FormControlLabel
-                control={<Switch checked={!!settings.markReadOnOpen} onChange={(e) => save({ markReadOnOpen: e.target.checked })} />}
-                label="Mark read on open"
-              />
-              <FormControlLabel
-                control={<Switch checked={!!settings.unreadFirstDefault} onChange={(e) => save({ unreadFirstDefault: e.target.checked })} />}
-                label="Unread first default"
-              />
-              <FormControl fullWidth>
-                <InputLabel id="default-view-label">Default view</InputLabel>
-                <Select
-                  labelId="default-view-label"
-                  label="Default view"
-                  value={settings.defaultViewMode || 'list'}
-                  onChange={(e) => save({ defaultViewMode: e.target.value as 'list' | 'card' | 'magazine' })}
+        <Paper
+          component="aside"
+          sx={{
+            position: { xs: 'static', md: 'sticky' },
+            top: 0,
+            display: 'flex',
+            flexDirection: { xs: 'row', md: 'column' },
+            gap: 0,
+            p: 0,
+            minHeight: { xs: 'auto', md: '100vh' },
+            border: 0,
+            borderRight: { md: '1px solid var(--card-border)' },
+            borderBottom: { xs: '1px solid var(--card-border)', md: 0 },
+            borderRadius: 0,
+            bgcolor: '#16191c',
+            overflow: 'hidden'
+          }}
+        >
+          <Box sx={{ p: { xs: 1.25, md: 1.5 } }}>
+            <Typography variant="h6" fontWeight={800}>
+              Preferences
+            </Typography>
+          </Box>
+          <Divider sx={{ borderColor: 'var(--card-border)' }} />
+          {navItems.map((item, index) => {
+            const active = activePage === item.page;
+            return (
+              <React.Fragment key={item.page}>
+                <ListItemButton
+                  selected={active}
+                  onClick={() => setActivePage(item.page)}
+                  sx={{
+                    flex: '0 0 auto',
+                    minHeight: 48,
+                    borderRadius: 0,
+                    px: 1.5,
+                    color: active ? '#4177c2' : 'var(--muted)',
+                    bgcolor: active ? 'rgba(56, 189, 248, 0.12)' : 'transparent',
+                    '&.Mui-selected': { bgcolor: 'rgba(56, 189, 248, 0.12)' },
+                    '&:hover, &.Mui-selected:hover': { bgcolor: active ? 'rgba(56, 189, 248, 0.16)' : 'rgba(255, 255, 255, 0.05)' }
+                  }}
                 >
-                  <MenuItem value="list">List</MenuItem>
-                  <MenuItem value="card">Card</MenuItem>
-                  <MenuItem value="magazine">Magazine</MenuItem>
-                </Select>
-              </FormControl>
-              <FormControl fullWidth>
-                <InputLabel id="theme-label">Theme</InputLabel>
-                <Select
-                  labelId="theme-label"
-                  label="Theme"
-                  value={settings.theme || 'default'}
-                  onChange={(e) => save({ theme: e.target.value as Settings['theme'] })}
-                >
-                  <MenuItem value="default">Current</MenuItem>
-                  <MenuItem value="light">Light</MenuItem>
-                  <MenuItem value="dark">Dark</MenuItem>
-                </Select>
-              </FormControl>
-              <TextField
-                label="Refresh every (minutes)"
-                type="number"
-                inputProps={{ min: 1 }}
-                value={settings.refreshMinutes ?? 5}
-                onChange={(e) => save({ refreshMinutes: Math.max(1, Number(e.target.value) || 1) })}
-                fullWidth
-              />
-              <FormControl fullWidth>
-                <InputLabel id="retention-label">RSS article retention</InputLabel>
-                <Select
-                  labelId="retention-label"
-                  label="RSS article retention"
-                  value={settings.articleRetention || 'off'}
-                  onChange={(e) => save({ articleRetention: e.target.value as Settings['articleRetention'] })}
-                >
-                  <MenuItem value="off">Off</MenuItem>
-                  <MenuItem value="1w">1 week</MenuItem>
-                  <MenuItem value="1m">1 month</MenuItem>
-                  <MenuItem value="1y">1 year</MenuItem>
-                </Select>
-              </FormControl>
-            </Stack>
-          </Section>
-        </Box>
-      )}
+                  <ListItemIcon sx={{ minWidth: 34, color: active ? '#4177c2' : 'inherit' }}>{item.icon}</ListItemIcon>
+                  <ListItemText
+                    primary={item.label}
+                    primaryTypographyProps={{ fontWeight: 800, noWrap: true }}
+                    sx={{ display: 'block' }}
+                  />
+                </ListItemButton>
+                {index < navItems.length - 1 && <Divider sx={{ borderColor: 'var(--card-border)' }} />}
+              </React.Fragment>
+            );
+          })}
+        </Paper>
 
-      {activeTab === 'OPML' && (
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(260px, 1fr))' }, gap: 1.5 }}>
-          <Section title="OPML">
-            <Stack spacing={1.25} alignItems="flex-start">
-              <Button variant="outlined" startIcon={<UploadFileIcon />} component="label" disabled={importing}>
-                {importing ? 'Importing...' : 'Import'}
-                <Box
-                  component="input"
-                  type="file"
-                  accept=".opml,.xml,text/xml"
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFile(e.target.files?.[0])}
-                  sx={{ display: 'none' }}
-                />
-              </Button>
-              <Button variant="contained" startIcon={<DownloadIcon />} onClick={exportOpml}>
-                Export
-              </Button>
-              {importResult && <Alert severity={importResult.startsWith('Imported') ? 'success' : 'error'}>{importResult}</Alert>}
-            </Stack>
-          </Section>
-        </Box>
-      )}
-
-      {activeTab === 'Content' && (
-        <Stack spacing={1.25}>
-          {feedsError && <Alert severity="error">{feedsError}</Alert>}
-          <TableContainer component={Paper} sx={{ bgcolor: 'var(--card-bg-soft)', border: '1px solid var(--card-border)', borderRadius: 2 }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ width: 120, color: 'var(--muted)', fontWeight: 800 }}>Enabled</TableCell>
-                  <TableCell sx={{ color: 'var(--muted)', fontWeight: 800 }}>Feed</TableCell>
-                  <TableCell align="right" sx={{ width: 160, color: 'var(--muted)', fontWeight: 800 }}>
-                    Options
-                  </TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {feedsLoading && (
-                  <TableRow>
-                    <TableCell colSpan={3} sx={{ color: 'var(--muted)' }}>
-                      Loading feeds...
-                    </TableCell>
-                  </TableRow>
+        <Stack spacing={0} minWidth={0} sx={{ width: '100%', bgcolor: '#16191c' }}>
+          <Paper
+            component="header"
+            sx={{
+              border: 0,
+              borderBottom: '1px solid var(--card-border)',
+              borderRadius: 0,
+              bgcolor: '#16191c',
+              px: 0,
+              minHeight: 53,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Stack
+              direction="row"
+              alignItems="center"
+              gap="10px"
+              sx={{
+                width: '100%',
+                maxWidth: 1040,
+                height: '100%',
+                mx: 'auto',
+                px: { xs: 1.5, md: 2.5 },
+                boxSizing: 'border-box',
+                position: 'relative'
+              }}
+            >
+              <Box sx={{ width: 96, display: 'flex', justifyContent: 'center', flexShrink: 0, transform: 'translateY(14px)' }}>
+                <Typography
+                  variant="h5"
+                  fontWeight={800}
+                  sx={{
+                    fontSize: 18,
+                    fontFamily: '"Public Sans", sans-serif',
+                    textAlign: 'center'
+                  }}
+                >
+                  {activePage}
+                </Typography>
+              </Box>
+              <Box sx={{ transform: 'translateY(6px)' }}>
+                {activePage === 'Settings' ? (
+                  <Tabs
+                    value={settingsTab}
+                    onChange={(_, value) => setSettingsTab(value)}
+                    variant="scrollable"
+                    scrollButtons="auto"
+                    sx={{
+                      minHeight: 42,
+                      '& .MuiTab-root': { minHeight: 42, color: 'var(--muted)', fontWeight: 800 },
+                      '& .Mui-selected': { color: '#4177c2' },
+                      '& .MuiTabs-indicator': { bgcolor: '#4177c2' }
+                    }}
+                  >
+                    <Tab label="General" value="General" />
+                    <Tab label="OPML" value="OPML" />
+                  </Tabs>
+                ) : (
+                  <Tabs
+                    value={contentTab}
+                    onChange={(_, value) => setContentTab(value)}
+                    sx={{
+                      minHeight: 42,
+                      '& .MuiTab-root': { minHeight: 42, color: 'var(--muted)', fontWeight: 800 },
+                      '& .Mui-selected': { color: '#4177c2' },
+                      '& .MuiTabs-indicator': { bgcolor: '#4177c2' }
+                    }}
+                  >
+                    <Tab label="Feeds" value="Feeds" />
+                    <Tab label="Folders" value="Folders" />
+                    <Tab label="Tags" value="Tags" />
+                  </Tabs>
                 )}
-                {!feedsLoading && sortedFeeds.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={3} sx={{ color: 'var(--muted)' }}>
-                      No feeds configured yet
-                    </TableCell>
-                  </TableRow>
-                )}
-                {sortedFeeds.map((feed) => (
-                  <TableRow key={feed.id} hover>
-                    <TableCell>
-                      <Switch
-                        checked={feed.enabled}
-                        onChange={() => toggleFeedEnabled(feed)}
-                        inputProps={{ 'aria-label': feed.enabled ? 'Disable feed' : 'Enable feed' }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Stack direction="row" alignItems="center" spacing={1.25} minWidth={0}>
-                        <Avatar src={feedFavicon(feed.url) || undefined} alt="" variant="rounded" sx={{ width: 22, height: 22 }} />
+              </Box>
+              {message && <Typography color="var(--muted)" sx={{ position: 'absolute', right: 24 }}>{message}</Typography>}
+            </Stack>
+          </Paper>
+
+          {activePage === 'Settings' && settingsTab === 'General' && (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(260px, 1fr))' }, gap: 1.5, p: { xs: 1.5, md: 2.5 }, maxWidth: 1040, width: '100%', mx: 'auto', boxSizing: 'border-box' }}>
+              <Section>
+                <Stack spacing={1.5}>
+                  <FormControlLabel
+                    control={<Switch checked={!!settings.markReadOnOpen} onChange={(e) => save({ markReadOnOpen: e.target.checked })} />}
+                    label="Mark read on open"
+                  />
+                  <FormControlLabel
+                    control={<Switch checked={!!settings.unreadFirstDefault} onChange={(e) => save({ unreadFirstDefault: e.target.checked })} />}
+                    label="Unread first default"
+                  />
+                  <FormControl fullWidth>
+                    <InputLabel id="default-view-label">Default view</InputLabel>
+                    <Select
+                      labelId="default-view-label"
+                      label="Default view"
+                      value={settings.defaultViewMode || 'list'}
+                      onChange={(e) => save({ defaultViewMode: e.target.value as 'list' | 'card' | 'magazine' })}
+                    >
+                      <MenuItem value="list">List</MenuItem>
+                      <MenuItem value="card">Card</MenuItem>
+                      <MenuItem value="magazine">Magazine</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <FormControl fullWidth>
+                    <InputLabel id="theme-label">Theme</InputLabel>
+                    <Select
+                      labelId="theme-label"
+                      label="Theme"
+                      value={settings.theme || 'default'}
+                      onChange={(e) => save({ theme: e.target.value as Settings['theme'] })}
+                    >
+                      <MenuItem value="default">Current</MenuItem>
+                      <MenuItem value="light">Light</MenuItem>
+                      <MenuItem value="dark">Dark</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <TextField
+                    label="Refresh every (minutes)"
+                    type="number"
+                    inputProps={{ min: 1 }}
+                    value={settings.refreshMinutes ?? 5}
+                    onChange={(e) => save({ refreshMinutes: Math.max(1, Number(e.target.value) || 1) })}
+                    fullWidth
+                  />
+                  <FormControl fullWidth>
+                    <InputLabel id="retention-label">RSS article retention</InputLabel>
+                    <Select
+                      labelId="retention-label"
+                      label="RSS article retention"
+                      value={settings.articleRetention || 'off'}
+                      onChange={(e) => save({ articleRetention: e.target.value as Settings['articleRetention'] })}
+                    >
+                      <MenuItem value="off">Off</MenuItem>
+                      <MenuItem value="1w">1 week</MenuItem>
+                      <MenuItem value="1m">1 month</MenuItem>
+                      <MenuItem value="1y">1 year</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Stack>
+              </Section>
+            </Box>
+          )}
+
+          {activePage === 'Settings' && settingsTab === 'OPML' && (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(260px, 1fr))' }, gap: 1.5, p: { xs: 1.5, md: 2.5 }, maxWidth: 1040, width: '100%', mx: 'auto', boxSizing: 'border-box' }}>
+              <Section>
+                <Stack spacing={1.25} alignItems="flex-start">
+                  <Button variant="outlined" startIcon={<UploadFileIcon />} component="label" disabled={importing}>
+                    {importing ? 'Importing...' : 'Import'}
+                    <Box
+                      component="input"
+                      type="file"
+                      accept=".opml,.xml,text/xml"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleFile(e.target.files?.[0])}
+                      sx={{ display: 'none' }}
+                    />
+                  </Button>
+                  <Button variant="contained" startIcon={<DownloadIcon />} onClick={exportOpml}>
+                    Export
+                  </Button>
+                  {importResult && <Alert severity={importResult.startsWith('Imported') ? 'success' : 'error'}>{importResult}</Alert>}
+                </Stack>
+              </Section>
+            </Box>
+          )}
+
+          {activePage === 'Content' && contentTab === 'Feeds' && (
+            <Stack spacing={1.25} sx={{ p: { xs: 1.5, md: 2.5 }, maxWidth: 1040, width: '100%', mx: 'auto', boxSizing: 'border-box' }}>
+              {feedsError && <Alert severity="error">{feedsError}</Alert>}
+              <TableContainer component={Paper} sx={{ bgcolor: 'transparent', border: 0, borderRadius: 0, boxShadow: 'none' }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow>
+                      <TableCell sx={{ width: 120, color: 'var(--muted)', fontWeight: 800 }}>Enabled</TableCell>
+                      <TableCell sx={{ color: 'var(--muted)', fontWeight: 800 }}>Feed</TableCell>
+                      <TableCell align="right" sx={{ width: 160, color: 'var(--muted)', fontWeight: 800 }}>
+                        Options
+                      </TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {feedsLoading && (
+                      <TableRow>
+                        <TableCell colSpan={3} sx={{ color: 'var(--muted)' }}>
+                          Loading feeds...
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {!feedsLoading && sortedFeeds.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} sx={{ color: 'var(--muted)' }}>
+                          No feeds configured yet
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {sortedFeeds.map((feed) => (
+                      <TableRow key={feed.id} hover>
+                        <TableCell>
+                          <Switch
+                            checked={feed.enabled}
+                            onChange={() => toggleFeedEnabled(feed)}
+                            inputProps={{ 'aria-label': feed.enabled ? 'Disable feed' : 'Enable feed' }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Stack direction="row" alignItems="center" spacing={1.25} minWidth={0}>
+                            <Avatar src={feedFavicon(feed.url) || undefined} alt="" variant="rounded" sx={{ width: 22, height: 22 }} />
+                            <Box minWidth={0}>
+                              <Typography fontWeight={800} noWrap>
+                                {feed.title || 'Untitled feed'}
+                              </Typography>
+                              <Typography variant="body2" color="var(--muted)" noWrap>
+                                {feed.url}
+                              </Typography>
+                            </Box>
+                          </Stack>
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton aria-label="Edit feed" title="Edit feed" onClick={() => openEdit(feed)}>
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton aria-label="Delete feed" title="Delete feed" onClick={() => setDeleteTarget(feed)} sx={{ color: 'var(--danger)' }}>
+                            <DeleteIcon />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            </Stack>
+          )}
+
+          {activePage === 'Content' && contentTab === 'Folders' && (
+            <Stack spacing={1.25} sx={{ p: { xs: 1.5, md: 2.5 }, maxWidth: 1040, width: '100%', mx: 'auto', boxSizing: 'border-box', minHeight: 'calc(100vh - 82px)' }}>
+              {foldersError && <Alert severity="error">{foldersError}</Alert>}
+              {foldersLoading && <Typography color="var(--muted)">Loading folders...</Typography>}
+              {!foldersLoading && sortedFolders.length === 0 && (
+                <Stack alignItems="center" justifyContent="center" sx={{ flex: 1, minHeight: 'calc(100vh - 150px)' }}>
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => openFolderModal()}
+                    sx={{
+                      width: 'auto',
+                      minWidth: 0,
+                      px: '20px',
+                      py: '10px',
+                      background: '#4177c2',
+                      bgcolor: '#4177c2',
+                      color: '#f8fafc',
+                      '&:hover': { background: '#3568ad', bgcolor: '#3568ad' }
+                    }}
+                  >
+                    Add folder
+                  </Button>
+                </Stack>
+              )}
+              {!foldersLoading && sortedFolders.length > 0 && (
+                <Stack spacing={0}>
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mb: 1 }}>
+                    <Button
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={() => openFolderModal()}
+                      sx={{ background: '#4177c2', bgcolor: '#4177c2', color: '#f8fafc', '&:hover': { background: '#3568ad', bgcolor: '#3568ad' } }}
+                    >
+                      Add folder
+                    </Button>
+                  </Box>
+                  {sortedFolders.map((folder) => {
+                    const folderFeeds = sortedFeeds.filter((feed) => feed.folderId === folder.id);
+                    return (
+                      <Box
+                        key={folder.id}
+                        sx={{
+                          py: 1.5,
+                          borderBottom: '1px solid var(--card-border)',
+                          display: 'grid',
+                          gridTemplateColumns: { xs: '1fr', sm: 'minmax(180px, 260px) minmax(0, 1fr) auto' },
+                          gap: 1.5,
+                          alignItems: 'start'
+                        }}
+                      >
                         <Box minWidth={0}>
-                          <Typography fontWeight={800} noWrap>
-                            {feed.title || 'Untitled feed'}
-                          </Typography>
-                          <Typography variant="body2" color="var(--muted)" noWrap>
-                            {feed.url}
+                          <Typography fontWeight={800}>{folder.name}</Typography>
+                          <Typography variant="body2" color="var(--muted)">
+                            {folderFeeds.length === 1 ? '1 feed' : `${folderFeeds.length} feeds`}
                           </Typography>
                         </Box>
-                      </Stack>
-                    </TableCell>
-                    <TableCell align="right">
-                      <IconButton aria-label="Edit feed" title="Edit feed" onClick={() => openEdit(feed)}>
-                        <EditIcon />
-                      </IconButton>
-                      <IconButton aria-label="Delete feed" title="Delete feed" onClick={() => setDeleteTarget(feed)} sx={{ color: 'var(--danger)' }}>
+                        <Stack spacing={0.5} minWidth={0}>
+                          {folderFeeds.length === 0 ? (
+                            <Typography variant="body2" color="var(--muted)">
+                              No feeds in this folder
+                            </Typography>
+                          ) : (
+                            folderFeeds.map((feed) => (
+                              <Stack key={feed.id} direction="row" spacing={1} alignItems="center" minWidth={0}>
+                                <Avatar src={feedFavicon(feed.url) || undefined} alt="" variant="rounded" sx={{ width: 18, height: 18 }} />
+                                <Typography variant="body2" color="var(--muted)" noWrap>
+                                  {feed.title || feed.url}
+                                </Typography>
+                              </Stack>
+                            ))
+                          )}
+                        </Stack>
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          <IconButton aria-label="Edit folder" title="Edit folder" onClick={() => openFolderModal(folder)}>
+                            <EditIcon />
+                          </IconButton>
+                          <IconButton
+                            aria-label="Delete folder"
+                            title="Delete folder"
+                            disabled={folderDeletingId === folder.id}
+                            onClick={() => deleteFolder(folder)}
+                            sx={{ color: 'var(--danger)' }}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        </Stack>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Stack>
+          )}
+
+          {activePage === 'Content' && contentTab === 'Tags' && (
+            <Stack spacing={1.5} sx={{ p: { xs: 1.5, md: 2.5 }, maxWidth: 1040, width: '100%', mx: 'auto', boxSizing: 'border-box' }}>
+              {tagsError && <Alert severity="error">{tagsError}</Alert>}
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                <TextField
+                  label="Tag name"
+                  value={tagName}
+                  onChange={(e) => setTagName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') createTag();
+                  }}
+                  fullWidth
+                />
+                <Button variant="contained" startIcon={<AddIcon />} disabled={tagSaving || !tagName.trim()} onClick={createTag} sx={{ flexShrink: 0 }}>
+                  Add tag
+                </Button>
+              </Stack>
+              {tagsLoading && <Typography color="var(--muted)">Loading tags...</Typography>}
+              {!tagsLoading && sortedTags.length === 0 && (
+                <Stack alignItems="center" justifyContent="center" sx={{ minHeight: 300 }}>
+                  <Typography color="var(--muted)">No tags yet</Typography>
+                </Stack>
+              )}
+              {!tagsLoading && sortedTags.length > 0 && (
+                <Stack spacing={0}>
+                  {sortedTags.map((tag) => (
+                    <Stack
+                      key={tag.id}
+                      direction="row"
+                      alignItems="center"
+                      spacing={1.5}
+                      sx={{ py: 1.25, borderBottom: '1px solid var(--card-border)' }}
+                    >
+                      <Box minWidth={0} sx={{ flex: 1 }}>
+                        <Typography fontWeight={800} noWrap>
+                          {tag.name}
+                        </Typography>
+                        <Typography variant="body2" color="var(--muted)">
+                          {tag.usageCount === 1 ? '1 article' : `${tag.usageCount || 0} articles`}
+                        </Typography>
+                      </Box>
+                      <IconButton
+                        aria-label={`Delete tag ${tag.name}`}
+                        title="Delete tag"
+                        disabled={tagDeletingId === tag.id}
+                        onClick={() => deleteTag(tag)}
+                        sx={{ color: 'var(--danger)' }}
+                      >
                         <DeleteIcon />
                       </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+                    </Stack>
+                  ))}
+                </Stack>
+              )}
+            </Stack>
+          )}
         </Stack>
-      )}
+      </Box>
+
+      <Dialog
+        open={folderModalOpen}
+        onClose={closeFolderModal}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            bgcolor: 'var(--surface-raised)',
+            border: 0,
+            borderRadius: 0,
+            boxShadow: 'var(--shadow)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ p: 0 }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2, py: 1.5 }}>
+            <Typography variant="h6" fontWeight={800}>
+              Create folder
+            </Typography>
+            <IconButton aria-label="Close" onClick={closeFolderModal}>
+              <CloseIcon />
+            </IconButton>
+          </Stack>
+          <Divider sx={{ borderColor: 'var(--card-border)' }} />
+        </DialogTitle>
+        <DialogContent sx={{ px: 2, py: 2 }}>
+          <Stack spacing={1.5}>
+            {foldersError && <Alert severity="error">{foldersError}</Alert>}
+            <TextField label="Folder name" value={folderName} onChange={(e) => setFolderName(e.target.value)} autoFocus fullWidth />
+            <Autocomplete
+              value={null}
+              options={sortedFeeds.filter((feed) => !folderFeedIds.includes(feed.id))}
+              getOptionLabel={(feed) => feed.title || feed.url}
+              openOnFocus
+              clearOnBlur
+              onChange={(_, feed) => {
+                if (feed) setFolderFeedIds((prev) => [...prev, feed.id]);
+              }}
+              renderInput={(params) => <TextField {...params} label="Add feeds" placeholder="Search feeds" />}
+              renderOption={(props, feed) => (
+                <Box component="li" {...props} key={feed.id}>
+                  <Stack direction="row" spacing={1} alignItems="center" minWidth={0}>
+                    <Avatar src={feedFavicon(feed.url) || undefined} alt="" variant="rounded" sx={{ width: 20, height: 20 }} />
+                    <Box minWidth={0}>
+                      <Typography noWrap>{feed.title || 'Untitled feed'}</Typography>
+                      <Typography variant="body2" color="var(--muted)" noWrap>
+                        {feed.url}
+                      </Typography>
+                    </Box>
+                  </Stack>
+                </Box>
+              )}
+            />
+            <Stack spacing={0.75}>
+              {selectedFolderFeeds.map((feed) => (
+                <Stack key={feed.id} direction="row" alignItems="center" spacing={1} sx={{ py: 0.5 }}>
+                  <Avatar src={feedFavicon(feed.url) || undefined} alt="" variant="rounded" sx={{ width: 22, height: 22 }} />
+                  <Box minWidth={0} sx={{ flex: 1 }}>
+                    <Typography fontWeight={800} noWrap>
+                      {feed.title || 'Untitled feed'}
+                    </Typography>
+                    <Typography variant="body2" color="var(--muted)" noWrap>
+                      {feed.url}
+                    </Typography>
+                  </Box>
+                  <IconButton
+                    aria-label={`Remove ${feed.title || feed.url}`}
+                    title="Remove feed"
+                    onClick={() => setFolderFeedIds((prev) => prev.filter((id) => id !== feed.id))}
+                    sx={{
+                      color: '#fff',
+                      bgcolor: 'var(--danger)',
+                      width: 28,
+                      height: 28,
+                      '&:hover': { bgcolor: '#be123c' }
+                    }}
+                  >
+                    <RemoveCircleIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                </Stack>
+              ))}
+            </Stack>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2, pt: 0 }}>
+          <Button variant="contained" disabled={folderSaving || !folderName.trim()} onClick={saveFolder}>
+            {folderSaving ? 'Saving...' : 'Save folder'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog open={!!editTarget} onClose={() => !savingEdit && setEditTarget(null)} fullWidth maxWidth="xs">
         <DialogTitle>Edit feed</DialogTitle>
@@ -430,6 +949,6 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
           </Button>
         </DialogActions>
       </Dialog>
-    </Stack>
+    </Box>
   );
 };

@@ -119,6 +119,13 @@ const App: React.FC = () => {
   }, [displayItems.length]);
 
   useEffect(() => {
+    const syncPreferencesRoute = () => setSettingsView(window.location.pathname === '/preferences');
+    syncPreferencesRoute();
+    window.addEventListener('popstate', syncPreferencesRoute);
+    return () => window.removeEventListener('popstate', syncPreferencesRoute);
+  }, []);
+
+  useEffect(() => {
     const totalUnread = feeds.reduce((sum, f) => sum + (f.unreadCount || 0), 0);
     document.title = totalUnread > 0 ? `(${totalUnread}) Kunai` : 'Kunai';
   }, [feeds]);
@@ -567,12 +574,18 @@ const App: React.FC = () => {
   const openSettings = () => {
     setSettingsView(true);
     setMobileSidebarOpen(false);
+    if (window.location.pathname !== '/preferences') {
+      window.history.pushState({}, '', '/preferences');
+    }
   };
 
   const closeSettings = async () => {
     if (!settingsView) return;
     setSettingsView(false);
     setMobileSidebarOpen(false);
+    if (window.location.pathname === '/preferences') {
+      window.history.pushState({}, '', '/');
+    }
     await Promise.all([loadFeeds(), loadFolders(), loadTags()]);
     fetchItems();
   };
@@ -698,45 +711,47 @@ const App: React.FC = () => {
       <Box
         component="main"
         sx={{
-          px: settingsView ? { xs: 2, md: 2.5 } : { xs: 1.75, md: 3.25 },
-          py: settingsView ? { xs: 2, md: 2.5 } : { xs: 2, md: 2.5 },
+          px: settingsView ? 0 : { xs: 1.75, md: 3.25 },
+          py: settingsView ? 0 : { xs: 2, md: 2.5 },
           display: 'flex',
           flexDirection: 'column',
-          gap: 2,
+          gap: settingsView ? 0 : 2,
           minWidth: 0,
           width: '100%',
-          maxWidth: settingsView ? 1120 : 'none',
-          mx: settingsView ? 'auto' : 0,
+          maxWidth: 'none',
+          mx: 0,
           overflowX: 'clip'
         }}
       >
-        <HeaderBar
-          viewMode={viewMode}
-          onViewChange={setViewMode}
-          sort={sort}
-          onSortChange={setSort}
-          unreadOnly={unreadOnly}
-          unreadCount={unreadCount}
-          onUnreadChange={setUnreadOnly}
-          search={search}
-          onSearch={setSearch}
-          onRefresh={handleRefresh}
-          onMarkAllRead={handleMarkAll}
-          onMarkOlderRead={handleMarkOlderRead}
-          scopeLabel={settingsView ? 'Settings' : scopeLabel(selectedFeed, selectedFolderId, folders, savedView)}
-          condensed={!settingsView}
-          isMobile={isMobile}
-          onToggleSidebar={() => {
-            if (sidebarCollapsed) {
-              setSidebarCollapsed(false);
-              setMobileSidebarOpen(true);
-            } else {
-              setMobileSidebarOpen((prev) => !prev);
-            }
-          }}
-          isSettings={settingsView}
-          onBackFromSettings={closeSettings}
-        />
+        {!settingsView && (
+          <HeaderBar
+            viewMode={viewMode}
+            onViewChange={setViewMode}
+            sort={sort}
+            onSortChange={setSort}
+            unreadOnly={unreadOnly}
+            unreadCount={unreadCount}
+            onUnreadChange={setUnreadOnly}
+            search={search}
+            onSearch={setSearch}
+            onRefresh={handleRefresh}
+            onMarkAllRead={handleMarkAll}
+            onMarkOlderRead={handleMarkOlderRead}
+            scopeLabel={scopeLabel(selectedFeed, selectedFolderId, folders, savedView)}
+            condensed
+            isMobile={isMobile}
+            onToggleSidebar={() => {
+              if (sidebarCollapsed) {
+                setSidebarCollapsed(false);
+                setMobileSidebarOpen(true);
+              } else {
+                setMobileSidebarOpen((prev) => !prev);
+              }
+            }}
+            isSettings={false}
+            onBackFromSettings={closeSettings}
+          />
+        )}
         {settingsView ? (
           <SettingsPage
             onClose={closeSettings}

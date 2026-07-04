@@ -104,6 +104,10 @@ export const api = {
     const res = await fetch('/api/tags', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name }) });
     return handle(res);
   },
+  async deleteTag(id: number) {
+    const res = await fetch(`/api/tags/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error('Failed to delete tag');
+  },
   async getSettings(): Promise<Settings> {
     const res = await fetch('/api/settings');
     return handle(res);
@@ -132,6 +136,10 @@ export const api = {
   async createFolder(name: string, parentId?: string | null) {
     const res = await fetch('/api/folders', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ name, parentId: parentId ?? null }) });
     return handle<{ id: string }>(res);
+  },
+  async updateFolder(id: string, body: { name?: string; parentId?: string | null }) {
+    const res = await fetch(`/api/folders/${id}`, { method: 'PATCH', headers: jsonHeaders, body: JSON.stringify(body) });
+    return handle(res);
   },
   async deleteFolder(id: string) {
     const res = await fetch(`/api/folders/${id}`, { method: 'DELETE' });
