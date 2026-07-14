@@ -6,6 +6,7 @@ coverage
 # Local data and caches
 data
 .cache
+.codex-dev.log
 
 # Environment files
 .env

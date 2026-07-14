@@ -209,54 +209,52 @@ export const HeaderBar: React.FC<Props> = ({
               {scopeLabel}
             </Typography>
           )}
-          <ToggleButtonGroup
-            exclusive
-            size="small"
-            value={unreadOnly ? 'unread' : 'all'}
-            onChange={(_, value) => {
-              if (value) selectUnread(value === 'unread');
-            }}
-            aria-label="Article filter"
-            sx={{
-              display: { xs: 'none', sm: 'inline-flex' },
-              ml: condensed ? 2 : 0,
-              flexShrink: 0,
-              p: 0.25,
-              border: '1px solid var(--card-border)',
-              borderRadius: '10px',
-              bgcolor: 'var(--panel-2)',
-              '& .MuiToggleButtonGroup-grouped': {
-                border: 0,
-                borderRadius: '8px !important',
-                color: 'var(--muted)',
-                fontSize: 12,
-                fontWeight: 800,
-                lineHeight: 1,
-                minWidth: 68,
-                px: 1,
-                py: 0.8,
-                '&.Mui-selected': {
-                  bgcolor: 'rgba(56, 189, 248, 0.18)',
-                  color: 'var(--muted)'
-                },
-                '&.Mui-selected:hover': {
-                  bgcolor: 'rgba(56, 189, 248, 0.24)'
-                },
-                '&:hover': {
-                  bgcolor: 'rgba(255, 255, 255, 0.05)'
-                }
-              }
-            }}
-          >
-            <ToggleButton value="all" aria-label="All articles">
-              All Articles
-            </ToggleButton>
-            <ToggleButton value="unread" aria-label="Unread articles">
-              Unread ({unreadCount})
-            </ToggleButton>
-          </ToggleButtonGroup>
-
           <Stack direction="row" alignItems="center" spacing={0.5} sx={{ ml: 'auto' }}>
+            <ToggleButtonGroup
+              exclusive
+              size="small"
+              value={unreadOnly ? 'unread' : 'all'}
+              onChange={(_, value) => {
+                if (value) selectUnread(value === 'unread');
+              }}
+              aria-label="Article filter"
+              sx={{
+                display: { xs: 'none', sm: 'inline-flex' },
+                flexShrink: 0,
+                p: 0.25,
+                border: '1px solid var(--card-border)',
+                borderRadius: '10px',
+                bgcolor: 'var(--panel-2)',
+                '& .MuiToggleButtonGroup-grouped': {
+                  border: 0,
+                  borderRadius: '8px !important',
+                  color: 'var(--muted)',
+                  fontSize: 12,
+                  fontWeight: 800,
+                  lineHeight: 1,
+                  minWidth: 68,
+                  px: 1,
+                  py: 0.8,
+                  '&.Mui-selected': {
+                    bgcolor: 'rgba(56, 189, 248, 0.18)',
+                    color: 'var(--muted)'
+                  },
+                  '&.Mui-selected:hover': {
+                    bgcolor: 'rgba(56, 189, 248, 0.24)'
+                  },
+                  '&:hover': {
+                    bgcolor: 'rgba(255, 255, 255, 0.05)'
+                  }
+                }
+              }}
+            >
+              <ToggleButton value="all" aria-label="All articles">
+                All Articles
+              </ToggleButton>
+              <ToggleButton value="unread" aria-label="Unread articles">
+                Unread ({unreadCount})
+              </ToggleButton>
+            </ToggleButtonGroup>
             <TextField
               placeholder="Search in articles"
               value={search}
@@ -273,7 +271,6 @@ export const HeaderBar: React.FC<Props> = ({
               sx={{
                 display: { xs: 'none', md: 'block' },
                 width: condensed ? 'min(320px, 28vw)' : 'min(360px, 32vw)',
-                mr: 0.5,
                 '& .MuiOutlinedInput-root': {
                   width: '100%',
                   height: 40,

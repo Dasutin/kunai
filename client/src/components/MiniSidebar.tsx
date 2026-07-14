@@ -34,6 +34,9 @@ const RailButton: React.FC<{ title: string; onClick: () => void; children: React
         color: 'var(--muted)',
         bgcolor: 'transparent',
         border: 'none',
+        '& .MuiSvgIcon-root': {
+          fontSize: 28
+        },
         '&:hover': {
           bgcolor: 'transparent',
           color: 'var(--text)'
