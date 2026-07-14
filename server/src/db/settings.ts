@@ -3,8 +3,10 @@ import type { Settings } from '../../../shared/types.js';
 import { env } from '../env.js';
 
 export const settingsRepo = {
-  getAll(): Settings {
-    const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+  getAll(userId?: string): Settings {
+    const rows = userId
+      ? (db.prepare('SELECT key, value FROM user_settings WHERE userId = ?').all(userId) as { key: string; value: string }[])
+      : (db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[]);
     const result: Settings = {};
     for (const row of rows) {
       switch (row.key) {
@@ -46,11 +48,13 @@ export const settingsRepo = {
     return result;
   },
 
-  update(settings: Settings) {
-    const stmt = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+  update(userId: string, settings: Settings) {
+    const stmt = db.prepare(
+      'INSERT INTO user_settings (userId, key, value) VALUES (?, ?, ?) ON CONFLICT(userId, key) DO UPDATE SET value = excluded.value'
+    );
     const tx = db.transaction(() => {
       for (const [key, val] of Object.entries(settings)) {
-        stmt.run(key, String(val));
+        stmt.run(userId, key, String(val));
       }
     });
     tx();

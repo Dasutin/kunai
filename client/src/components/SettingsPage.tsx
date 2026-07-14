@@ -41,11 +41,14 @@ import DownloadIcon from '@mui/icons-material/Download';
 import EditIcon from '@mui/icons-material/Edit';
 import RemoveCircleIcon from '@mui/icons-material/RemoveCircle';
 import SettingsIcon from '@mui/icons-material/Settings';
+import PersonIcon from '@mui/icons-material/Person';
+import LogoutIcon from '@mui/icons-material/Logout';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { api } from '../api';
-import type { FeedWithUnread, Folder, Settings, Tag } from '@shared/types';
+import type { FeedWithUnread, Folder, Settings, Tag, UserProfile } from '@shared/types';
 
-type PreferencePage = 'Settings' | 'Content';
+type PreferencePage = 'Account' | 'Settings' | 'Content';
+type AccountTabKey = 'Profile';
 type SettingsTabKey = 'General' | 'OPML';
 type ContentTabKey = 'Feeds' | 'Folders' | 'Tags';
 type FolderWithUnread = Folder & { unreadCount: number };
@@ -82,13 +85,37 @@ const feedFavicon = (url: string) => {
   return null;
 };
 
-export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settings['theme'] }> = ({ onClose, initialTheme }) => {
+const profileInitials = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
+
+const profileColor = (name: string) => {
+  const colors = ['#2563eb', '#7c3aed', '#be185d', '#047857', '#b45309', '#0f766e'];
+  const value = [...name].reduce((sum, character) => sum + character.charCodeAt(0), 0);
+  return colors[value % colors.length];
+};
+
+type Props = {
+  onClose: () => void;
+  initialTheme?: Settings['theme'];
+  user: UserProfile;
+  onUserChange: (user: UserProfile) => void;
+  onSignOut: () => Promise<void>;
+};
+
+export const SettingsPage: React.FC<Props> = ({ onClose, initialTheme, user, onUserChange, onSignOut }) => {
   const [settings, setSettings] = useState<Settings>({});
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string | null>(null);
-  const [activePage, setActivePage] = useState<PreferencePage>('Settings');
+  const [activePage, setActivePage] = useState<PreferencePage>('Account');
+  const [accountTab, setAccountTab] = useState<AccountTabKey>('Profile');
   const [settingsTab, setSettingsTab] = useState<SettingsTabKey>('General');
   const [contentTab, setContentTab] = useState<ContentTabKey>('Feeds');
   const [feeds, setFeeds] = useState<FeedWithUnread[]>([]);
@@ -114,6 +141,15 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
   const [savingEdit, setSavingEdit] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<FeedWithUnread | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [profileName, setProfileName] = useState(user.name);
+  const [profileEmail, setProfileEmail] = useState(user.email);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [nextPassword, setNextPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   const applyTheme = (theme?: Settings['theme']) => {
     document.documentElement.setAttribute('data-theme', theme || 'default');
@@ -169,6 +205,11 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
   }, [initialTheme]);
 
   useEffect(() => {
+    setProfileName(user.name);
+    setProfileEmail(user.email);
+  }, [user.email, user.name]);
+
+  useEffect(() => {
     loadFeeds();
     loadFolders();
     loadTags();
@@ -191,6 +232,65 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
     }
     setMessage('Saved');
     setTimeout(() => setMessage(null), 1500);
+  };
+
+  const saveProfile = async () => {
+    setProfileSaving(true);
+    setProfileError(null);
+    try {
+      const updated = await api.updateProfile({ name: profileName.trim(), email: profileEmail.trim() });
+      onUserChange(updated);
+      setMessage('Profile saved');
+      setTimeout(() => setMessage(null), 1500);
+    } catch (err: any) {
+      setProfileError(err?.message || 'Unable to save your profile.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const changeProfileImage = (file?: File | null) => {
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type) || file.size > 1024 * 1024) {
+      setProfileError('Choose a PNG, JPEG, WebP, or GIF image smaller than 1 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        setProfileError(null);
+        setProfileSaving(true);
+        const updated = await api.uploadProfileImage(String(reader.result));
+        onUserChange(updated);
+      } catch (err: any) {
+        setProfileError(err?.message || 'Unable to upload your profile picture.');
+      } finally {
+        setProfileSaving(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const submitPasswordChange = async () => {
+    if (nextPassword !== confirmPassword) {
+      setProfileError('The new passwords do not match.');
+      return;
+    }
+    setPasswordSaving(true);
+    setProfileError(null);
+    try {
+      await api.changePassword(currentPassword, nextPassword);
+      setCurrentPassword('');
+      setNextPassword('');
+      setConfirmPassword('');
+      setChangePasswordOpen(false);
+      setMessage('Password updated');
+      setTimeout(() => setMessage(null), 1500);
+    } catch (err: any) {
+      setProfileError(err?.message || 'Unable to update your password.');
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   const handleFile = async (file?: File | null) => {
@@ -370,6 +470,7 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
   }
 
   const navItems: Array<{ page: PreferencePage; label: string; icon: React.ReactNode }> = [
+    { page: 'Account', label: 'Account', icon: <PersonIcon fontSize="small" /> },
     { page: 'Settings', label: 'Settings', icon: <SettingsIcon fontSize="small" /> },
     { page: 'Content', label: 'Content', icon: <ArticleIcon fontSize="small" /> }
   ];
@@ -483,7 +584,20 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
                 </Typography>
               </Box>
               <Box sx={{ transform: 'translateY(6px)' }}>
-                {activePage === 'Settings' ? (
+                {activePage === 'Account' ? (
+                  <Tabs
+                    value={accountTab}
+                    onChange={(_, value) => setAccountTab(value)}
+                    sx={{
+                      minHeight: 42,
+                      '& .MuiTab-root': { minHeight: 42, color: 'var(--muted)', fontWeight: 800 },
+                      '& .Mui-selected': { color: '#4177c2' },
+                      '& .MuiTabs-indicator': { bgcolor: '#4177c2' }
+                    }}
+                  >
+                    <Tab label="Profile" value="Profile" />
+                  </Tabs>
+                ) : activePage === 'Settings' ? (
                   <Tabs
                     value={settingsTab}
                     onChange={(_, value) => setSettingsTab(value)}
@@ -519,6 +633,50 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
               {message && <Typography color="var(--muted)" sx={{ position: 'absolute', right: 24 }}>{message}</Typography>}
             </Stack>
           </Paper>
+
+          {activePage === 'Account' && accountTab === 'Profile' && (
+            <Box sx={{ p: { xs: 1.5, md: 2.5 }, maxWidth: 720, width: '100%', mx: 'auto', boxSizing: 'border-box' }}>
+              <Section>
+                <Stack spacing={2.5}>
+                  {profileError && <Alert severity="error">{profileError}</Alert>}
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                    <Avatar
+                      src={user.profileImage || undefined}
+                      alt={user.name}
+                      sx={{ width: 88, height: 88, fontSize: 28, fontWeight: 800, bgcolor: profileColor(user.name) }}
+                    >
+                      {profileInitials(user.name)}
+                    </Avatar>
+                    <Button component="label" variant="outlined" disabled={profileSaving} sx={{ height: 36, alignSelf: 'center' }}>
+                      Change profile picture
+                      <input hidden accept="image/png,image/jpeg,image/webp,image/gif" type="file" onChange={(event) => changeProfileImage(event.target.files?.[0])} />
+                    </Button>
+                  </Stack>
+                  <TextField label="Name" value={profileName} onChange={(event) => setProfileName(event.target.value)} autoComplete="name" fullWidth />
+                  <TextField label="Email" type="email" value={profileEmail} onChange={(event) => setProfileEmail(event.target.value)} autoComplete="email" fullWidth />
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} alignItems={{ xs: 'stretch', sm: 'center' }}>
+                    <TextField label="Password" value="••••••••••••" InputProps={{ readOnly: true }} fullWidth />
+                    <Button variant="outlined" onClick={() => setChangePasswordOpen(true)} sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+                      Change Password
+                    </Button>
+                  </Stack>
+                  <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing={1.25} justifyContent="space-between">
+                    <Button color="error" startIcon={<LogoutIcon />} onClick={() => void onSignOut()}>
+                      Logout
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={saveProfile}
+                      disabled={profileSaving || !profileName.trim() || !profileEmail.trim()}
+                      sx={{ background: '#4177c2', color: '#fff', '&:hover': { background: '#4177c2' } }}
+                    >
+                      Save changes
+                    </Button>
+                  </Stack>
+                </Stack>
+              </Section>
+            </Box>
+          )}
 
           {activePage === 'Settings' && settingsTab === 'General' && (
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(auto-fit, minmax(260px, 1fr))' }, gap: 1.5, p: { xs: 1.5, md: 2.5 }, maxWidth: 1040, width: '100%', mx: 'auto', boxSizing: 'border-box' }}>
@@ -783,7 +941,19 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
                   }}
                   fullWidth
                 />
-                <Button variant="contained" startIcon={<AddIcon />} disabled={tagSaving || !tagName.trim()} onClick={createTag} sx={{ flexShrink: 0 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  disabled={tagSaving || !tagName.trim()}
+                  onClick={createTag}
+                  sx={{
+                    flexShrink: 0,
+                    background: '#4177c2',
+                    color: '#fff',
+                    '&:hover': { background: '#4177c2' },
+                    '&.Mui-disabled': { background: '#4177c2', color: '#fff', opacity: 0.55 }
+                  }}
+                >
                   Add tag
                 </Button>
               </Stack>
@@ -946,6 +1116,30 @@ export const SettingsPage: React.FC<{ onClose: () => void; initialTheme?: Settin
           </Button>
           <Button variant="contained" color="error" disabled={deleting} onClick={confirmDelete}>
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={changePasswordOpen} onClose={() => !passwordSaving && setChangePasswordOpen(false)} fullWidth maxWidth="xs">
+        <DialogTitle>Change Password</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5} sx={{ pt: 0.5 }}>
+            <TextField label="Current Password" type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoFocus fullWidth />
+            <TextField label="New Password" type="password" autoComplete="new-password" helperText="Use at least 10 characters." value={nextPassword} onChange={(event) => setNextPassword(event.target.value)} fullWidth />
+            <TextField label="Confirm New Password" type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} fullWidth />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setChangePasswordOpen(false)} disabled={passwordSaving}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={submitPasswordChange}
+            disabled={passwordSaving || !currentPassword || nextPassword.length < 10 || !confirmPassword}
+            sx={{ background: '#4177c2', '&:hover': { background: '#4177c2' } }}
+          >
+            Change Password
           </Button>
         </DialogActions>
       </Dialog>

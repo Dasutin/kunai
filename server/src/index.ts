@@ -8,7 +8,6 @@ import { db } from './db/client.js';
 import { applyMigrations } from './db/migrations.js';
 import { feedsRepo, itemsRepo } from './db/repository.js';
 import { refreshAllFeeds } from './rss/scheduler.js';
-import { updateSchedulerInterval } from './rss/scheduler.js';
 import { refreshFeed } from './rss/fetcher.js';
 import type {
   FeedCreateRequest,
@@ -25,6 +24,7 @@ import { tagsRepo } from './db/tags.js';
 import { settingsRepo } from './db/settings.js';
 import { parseOpml, buildOpml } from './opml.js';
 import { fetchReadable } from './content/fetcher.js';
+import { usersRepo } from './db/users.js';
 
 applyMigrations(db);
 
@@ -43,8 +43,116 @@ const parseNumber = (val: any) => {
   return Number.isFinite(num) ? num : undefined;
 };
 
+type AuthenticatedRequest = express.Request & { user?: { id: string; email: string; name: string; profileImage: string | null; createdAt: string } };
+
+const sessionCookie = 'kunai_session';
+const sessionCookieOptions = {
+  httpOnly: true,
+  sameSite: 'lax' as const,
+  secure: env.nodeEnv === 'production',
+  path: '/',
+  maxAge: 30 * 24 * 60 * 60 * 1000
+};
+
+const readCookie = (req: express.Request, name: string) => {
+  const cookie = req.headers.cookie;
+  if (!cookie) return null;
+  const match = cookie.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
+};
+
+const currentUserId = (req: express.Request) => (req as AuthenticatedRequest).user!.id;
+
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });
+});
+
+app.get('/api/auth/me', (req, res) => {
+  const token = readCookie(req, sessionCookie);
+  const user = token ? usersRepo.findSession(token) : null;
+  if (!user) return res.status(401).json({ message: 'Not signed in' });
+  res.json(user);
+});
+
+app.post('/api/auth/register', async (req, res) => {
+  const schema = z.object({
+    email: z.string().trim().email().max(254),
+    name: z.string().trim().min(1).max(120),
+    password: z.string().min(10).max(256)
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Provide a valid email, name, and password of at least 10 characters.' });
+  try {
+    const user = await usersRepo.create(parsed.data.email, parsed.data.name, parsed.data.password);
+    const session = usersRepo.createSession(user.id);
+    res.cookie(sessionCookie, session.token, sessionCookieOptions);
+    res.status(201).json(user);
+  } catch (err: any) {
+    if (err?.code?.startsWith('SQLITE_CONSTRAINT')) return res.status(409).json({ message: 'An account with that email already exists.' });
+    throw err;
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const schema = z.object({ email: z.string().trim().email(), password: z.string().min(1) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Enter your email and password.' });
+  const user = await usersRepo.authenticate(parsed.data.email, parsed.data.password);
+  if (!user) return res.status(401).json({ message: 'Email or password is incorrect.' });
+  const session = usersRepo.createSession(user.id);
+  res.cookie(sessionCookie, session.token, sessionCookieOptions);
+  res.json(user);
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  const token = readCookie(req, sessionCookie);
+  if (token) usersRepo.deleteSession(token);
+  res.clearCookie(sessionCookie, { ...sessionCookieOptions, maxAge: undefined });
+  res.status(204).end();
+});
+
+app.use('/api', (req, res, next) => {
+  const token = readCookie(req, sessionCookie);
+  const user = token ? usersRepo.findSession(token) : null;
+  if (!user) return res.status(401).json({ message: 'Sign in to continue.' });
+  (req as AuthenticatedRequest).user = user;
+  next();
+});
+
+app.patch('/api/auth/profile', (req, res) => {
+  const schema = z
+    .object({ email: z.string().trim().email().max(254).optional(), name: z.string().trim().min(1).max(120).optional() })
+    .refine((value) => value.email !== undefined || value.name !== undefined);
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Provide a valid name or email.' });
+  try {
+    const user = usersRepo.updateProfile(currentUserId(req), parsed.data);
+    res.json(user);
+  } catch (err: any) {
+    if (err?.code?.startsWith('SQLITE_CONSTRAINT')) return res.status(409).json({ message: 'An account with that email already exists.' });
+    throw err;
+  }
+});
+
+app.post('/api/auth/profile-image', (req, res) => {
+  const schema = z.object({
+    imageData: z
+      .string()
+      .max(1_400_000)
+      .regex(/^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/)
+  });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Upload a PNG, JPEG, WebP, or GIF image under 1 MB.' });
+  res.json(usersRepo.updateProfile(currentUserId(req), { profileImage: parsed.data.imageData }));
+});
+
+app.post('/api/auth/change-password', async (req, res) => {
+  const schema = z.object({ currentPassword: z.string().min(1), nextPassword: z.string().min(10).max(256) });
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'Your new password must be at least 10 characters.' });
+  const changed = await usersRepo.changePassword(currentUserId(req), parsed.data.currentPassword, parsed.data.nextPassword);
+  if (!changed) return res.status(400).json({ message: 'Your current password is incorrect.' });
+  res.json({ ok: true });
 });
 
 // Folders
@@ -257,15 +365,12 @@ app.post('/api/tags/merge', (req, res) => {
 
 // Settings
 app.get('/api/settings', (_req, res) => {
-  res.json(settingsRepo.getAll());
+  res.json(settingsRepo.getAll(currentUserId(_req)));
 });
 
 app.patch('/api/settings', (req, res) => {
   const body = req.body as Settings;
-  settingsRepo.update(body);
-  if (body.refreshMinutes && Number(body.refreshMinutes) > 0) {
-    updateSchedulerInterval(Number(body.refreshMinutes));
-  }
+  settingsRepo.update(currentUserId(req), body);
   res.json({ ok: true });
 });
 

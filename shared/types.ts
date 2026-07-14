@@ -97,3 +97,11 @@ export type Settings = Partial<{
 }>;
 
 export type ApiError = { message: string; details?: unknown };
+
+export type UserProfile = {
+  id: string;
+  email: string;
+  name: string;
+  profileImage: string | null;
+  createdAt: string;
+};

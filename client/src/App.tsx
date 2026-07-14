@@ -3,7 +3,7 @@ import { Alert, Box, Button, Chip, Fab, Stack, Tooltip, Typography } from '@mui/
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { api } from './api';
-import { FeedWithUnread, Folder, Item, Settings, Tag } from '@shared/types';
+import { FeedWithUnread, Folder, Item, Settings, Tag, UserProfile } from '@shared/types';
 import { usePersistedState } from './hooks/usePersistedState';
 import { Sidebar } from './components/Sidebar';
 import { HeaderBar } from './components/HeaderBar';
@@ -16,6 +16,7 @@ import { SettingsPage } from './components/SettingsPage';
 import { MiniSidebar } from './components/MiniSidebar';
 import { CreateFolderModal } from './components/CreateFolderModal';
 import { DeleteFolderModal } from './components/DeleteFolderModal';
+import { AuthPage } from './components/AuthPage';
 import { kunaiLayout } from './theme';
 
 type FolderWithUnread = Folder & { unreadCount: number };
@@ -50,7 +51,7 @@ const scopeLabel = (selectedFeed: FeedWithUnread | null, selectedFolderId: strin
   return 'Newsfeed';
 };
 
-const App: React.FC = () => {
+const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile) => void; onSignOut: () => Promise<void> }> = ({ user, onUserChange, onSignOut }) => {
   const [feeds, setFeeds] = useState<FeedWithUnread[]>([]);
   const [folders, setFolders] = useState<FolderWithUnread[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -75,6 +76,7 @@ const App: React.FC = () => {
   const [modalItem, setModalItem] = useState<Item | null>(null);
   const [addingFeed, setAddingFeed] = useState(false);
   const [settingsView, setSettingsView] = useState(false);
+  const [accountPageKey, setAccountPageKey] = useState(0);
   const [createFolderOpen, setCreateFolderOpen] = useState(false);
   const [folderToDelete, setFolderToDelete] = useState<{ folder: FolderWithUnread; feedCount: number } | null>(null);
   const [deletingFolder, setDeletingFolder] = useState(false);
@@ -579,6 +581,11 @@ const App: React.FC = () => {
     }
   };
 
+  const openAccount = () => {
+    setAccountPageKey((value) => value + 1);
+    openSettings();
+  };
+
   const closeSettings = async () => {
     if (!settingsView) return;
     setSettingsView(false);
@@ -655,6 +662,8 @@ const App: React.FC = () => {
         onSelectHome={goHome}
         onSelectSaved={goSaved}
         onSettings={openSettings}
+        onAccount={openAccount}
+        user={user}
         onAddFeed={() => setAddingFeed(true)}
         isMobile={isMobile}
         onToggleContext={() => setMobileSidebarOpen((prev) => !prev)}
@@ -754,8 +763,12 @@ const App: React.FC = () => {
         )}
         {settingsView ? (
           <SettingsPage
+            key={accountPageKey}
             onClose={closeSettings}
             initialTheme={settings?.theme}
+            user={user}
+            onUserChange={onUserChange}
+            onSignOut={onSignOut}
           />
         ) : (
           <>
@@ -929,6 +942,36 @@ const App: React.FC = () => {
       )}
     </Box>
   );
+};
+
+const App: React.FC = () => {
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  useEffect(() => {
+    api
+      .getCurrentUser()
+      .then(setUser)
+      .finally(() => setAuthReady(true));
+  }, []);
+
+  const signOut = async () => {
+    await api.logout();
+    setUser(null);
+    window.history.replaceState({}, '', '/login');
+  };
+
+  if (!authReady) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center', bgcolor: '#0d0f12' }}>
+        <Typography color="var(--muted)">Loading Kunai…</Typography>
+      </Box>
+    );
+  }
+
+  if (!user) return <AuthPage onAuthenticated={setUser} />;
+
+  return <ReaderApp user={user} onUserChange={setUser} onSignOut={signOut} />;
 };
 
 export default App;

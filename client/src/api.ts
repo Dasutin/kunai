@@ -7,7 +7,8 @@ import {
   MarkReadRequest,
   Tag,
   Settings,
-  Folder
+  Folder,
+  UserProfile
 } from '@shared/types';
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
@@ -40,6 +41,39 @@ const handle = async <T>(res: Response): Promise<T> => {
 };
 
 export const api = {
+  async getCurrentUser(): Promise<UserProfile | null> {
+    const res = await fetch('/api/auth/me');
+    if (res.status === 401) return null;
+    return handle(res);
+  },
+  async login(email: string, password: string): Promise<UserProfile> {
+    const res = await fetch('/api/auth/login', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email, password }) });
+    return handle(res);
+  },
+  async register(email: string, name: string, password: string): Promise<UserProfile> {
+    const res = await fetch('/api/auth/register', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ email, name, password }) });
+    return handle(res);
+  },
+  async logout() {
+    const res = await fetch('/api/auth/logout', { method: 'POST' });
+    if (!res.ok && res.status !== 204) throw new Error('Failed to sign out');
+  },
+  async updateProfile(body: Pick<UserProfile, 'name' | 'email'>): Promise<UserProfile> {
+    const res = await fetch('/api/auth/profile', { method: 'PATCH', headers: jsonHeaders, body: JSON.stringify(body) });
+    return handle(res);
+  },
+  async uploadProfileImage(imageData: string): Promise<UserProfile> {
+    const res = await fetch('/api/auth/profile-image', { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ imageData }) });
+    return handle(res);
+  },
+  async changePassword(currentPassword: string, nextPassword: string) {
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: jsonHeaders,
+      body: JSON.stringify({ currentPassword, nextPassword })
+    });
+    return handle<{ ok: true }>(res);
+  },
   async getFeeds(): Promise<FeedWithUnread[]> {
     const res = await fetch('/api/feeds');
     return handle(res);

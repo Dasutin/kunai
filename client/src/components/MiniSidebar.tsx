@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, IconButton, Tooltip } from '@mui/material';
+import { Avatar, Box, IconButton, Tooltip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import BookmarkIcon from '@mui/icons-material/Bookmark';
 import MenuOpenIcon from '@mui/icons-material/MenuOpen';
@@ -7,11 +7,14 @@ import PushPinIcon from '@mui/icons-material/PushPin';
 import RssFeedIcon from '@mui/icons-material/RssFeed';
 import SettingsIcon from '@mui/icons-material/Settings';
 import { kunaiLayout } from '../theme';
+import type { UserProfile } from '@shared/types';
 
 interface MiniSidebarProps {
   onSelectHome: () => void;
   onSelectSaved: () => void;
   onSettings: () => void;
+  onAccount: () => void;
+  user: UserProfile;
   onAddFeed: () => void;
   isMobile: boolean;
   onToggleContext: () => void;
@@ -52,6 +55,8 @@ export const MiniSidebar: React.FC<MiniSidebarProps> = ({
   onSelectHome,
   onSelectSaved,
   onSettings,
+  onAccount,
+  user,
   onAddFeed,
   isMobile,
   onToggleContext,
@@ -125,6 +130,18 @@ export const MiniSidebar: React.FC<MiniSidebarProps> = ({
       <Box sx={{ flex: 1 }} />
       <RailButton title="Preferences" onClick={onSettings}>
         <SettingsIcon />
+      </RailButton>
+      <RailButton title="Account" onClick={onAccount}>
+        <Avatar src={user.profileImage || undefined} alt={user.name} sx={{ width: 28, height: 28, fontSize: 12, fontWeight: 800, bgcolor: '#0f766e' }}>
+          {user.name
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0])
+            .join('')
+            .toUpperCase()}
+        </Avatar>
       </RailButton>
       <RailButton title={sidebarPinned ? 'Unpin sidebar' : 'Pin sidebar'} onClick={onTogglePin}>
         <PushPinIcon />
