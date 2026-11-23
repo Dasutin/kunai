@@ -3,17 +3,39 @@ import { refreshFeed } from './fetcher.js';
 import { env } from '../env.js';
 import { settingsRepo } from '../db/settings.js';
 import { db } from '../db/client.js';
+import type { RefreshAllResponse } from '../../../shared/types.js';
 
-export const refreshAllFeeds = async () => {
+const runRefreshAllFeeds = async (): Promise<RefreshAllResponse> => {
   const feeds = feedsRepo.listWithUnread();
+  const result: RefreshAllResponse = { ok: true, refreshed: 0, failed: 0, skipped: 0, failures: [] };
   for (const feed of feeds) {
+    if (!feed.enabled) {
+      result.skipped++;
+      continue;
+    }
     try {
       await refreshFeed(feed);
+      result.refreshed++;
     } catch (err) {
       const name = feed.title || feed.url || `id ${feed.id}`;
+      const message = err instanceof Error ? err.message : 'Failed to refresh';
+      result.failures.push({ feedId: feed.id, title: name, message });
       console.error(`Failed to refresh feed "${name}" (id ${feed.id}):`, err);
     }
   }
+  result.failed = result.failures.length;
+  result.ok = result.failed === 0;
+  return result;
+};
+
+let refreshInFlight: Promise<RefreshAllResponse> | null = null;
+
+export const refreshAllFeeds = (): Promise<RefreshAllResponse> => {
+  // Timer ticks and manual requests share the same batch while it is running.
+  if (!refreshInFlight) {
+    refreshInFlight = runRefreshAllFeeds().finally(() => { refreshInFlight = null; });
+  }
+  return refreshInFlight;
 };
 
 let timer: NodeJS.Timeout | null = null;

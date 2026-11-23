@@ -27,7 +27,7 @@ The production Docker image builds the React app and TypeScript server, then ser
 - Start production build: `npm start`
 - Docker quickstart: `docker compose up --build`
 
-There is currently no dedicated test script. Use `npm run build` as the main repository-wide verification command after code changes.
+Run `npm test` for the focused RSS refresh and full-text search API regression tests, and `npm run build` for repository-wide production build verification.
 
 ## Architecture Rules
 

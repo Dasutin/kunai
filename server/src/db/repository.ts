@@ -4,6 +4,7 @@ import type {
   FeedUpdateRequest,
   ItemListResponse,
   ItemQuery,
+  MarkSearchedReadRequest,
   Tag
 } from '../../../shared/types.js';
 import sanitizeHtml from 'sanitize-html';
@@ -215,7 +216,31 @@ const buildWhereClause = (query: ItemQuery) => {
     conditions.push('(rs.isRead IS NULL OR rs.isRead = 0)');
   }
 
-  return { conditions, params };
+  if (query.savedOnly) conditions.push('i.saved = 1');
+
+  const usingFts = !!query.search && query.searchMode !== 'basic' && !query.savedOnly;
+  const tagFilter = query.tagIds && query.tagIds.length > 0;
+  if (usingFts) {
+    conditions.push('items_fts MATCH ?');
+    params.push(query.search);
+  } else if (query.search) {
+    if (query.savedOnly) {
+      // Saved's search is a literal title search, matching the reader's saved view.
+      conditions.push('instr(lower(i.title), lower(?)) > 0');
+      params.push(query.search);
+    } else {
+      conditions.push('(i.title LIKE ? OR i.snippet LIKE ? OR i.content LIKE ? OR f.title LIKE ?)');
+      const like = `%${query.search}%`;
+      params.push(like, like, like, like);
+    }
+  }
+  if (tagFilter) {
+    conditions.push(`it.tagId IN (${query.tagIds!.map(() => '?').join(',')})`);
+    params.push(...query.tagIds!);
+  }
+  const joins = `${tagFilter ? 'JOIN item_tags it ON it.itemId = i.id' : ''}
+    ${usingFts ? 'JOIN items_fts ON items_fts.rowid = i.id' : ''}`;
+  return { conditions, params, joins };
 };
 
 const applyCursor = (
@@ -284,25 +309,8 @@ export const itemsRepo = {
     const sort = query.sort || 'newest';
     const limit = Math.min(query.limit || 1000, 1000);
     const cursor = decodeCursor(query.cursor || null);
-    const { conditions, params } = buildWhereClause(query);
+    const { conditions, params, joins } = buildWhereClause(query);
     const { clause: cursorClause, params: cursorParams } = applyCursor(cursor, sort);
-
-    const usingFts = !!query.search && query.searchMode !== 'basic';
-    const tagFilter = query.tagIds && query.tagIds.length > 0;
-
-    if (usingFts && query.search) {
-      conditions.push('fts MATCH ?');
-      params.push(query.search);
-    } else if (query.search) {
-      conditions.push('(i.title LIKE ? OR i.snippet LIKE ? OR i.content LIKE ? OR f.title LIKE ?)');
-      const like = `%${query.search}%`;
-      params.push(like, like, like, like);
-    }
-
-    if (tagFilter) {
-      conditions.push(`it.tagId IN (${query.tagIds!.map(() => '?').join(',')})`);
-      params.push(...query.tagIds!);
-    }
 
     if (cursorClause) {
       conditions.push(cursorClause);
@@ -313,17 +321,13 @@ export const itemsRepo = {
     const orderDir = sort === 'newest' ? 'DESC' : 'ASC';
     const unreadOrder = query.unreadFirst ? 'rs.isRead ASC,' : '';
 
-    const joinTag = tagFilter ? 'JOIN item_tags it ON it.itemId = i.id' : '';
-    const searchSelect = usingFts ? 'JOIN items_fts fts ON fts.rowid = i.id' : '';
-
     const rows = db
       .prepare(
         `SELECT DISTINCT i.*, f.title as feedTitle, rs.isRead
          FROM items i
          JOIN feeds f ON f.id = i.feedId
          LEFT JOIN read_state rs ON rs.itemId = i.id
-         ${joinTag}
-         ${searchSelect}
+         ${joins}
          ${where}
          ORDER BY ${unreadOrder} i.publishedAt ${orderDir}, i.id ${orderDir}
          LIMIT ?`
@@ -406,6 +410,22 @@ export const itemsRepo = {
       }
     });
     mark();
+  },
+
+  markSearchedRead(query: MarkSearchedReadRequest) {
+    if (!query.search.trim()) throw new Error('A search is required');
+    const { conditions, params, joins } = buildWhereClause(query);
+    conditions.push('(rs.isRead IS NULL OR rs.isRead = 0)');
+    // Select all matches atomically, without the list endpoint's limit or cursor.
+    return db.prepare(
+      `INSERT INTO read_state (itemId, isRead, readAt)
+       SELECT DISTINCT i.id, 1, datetime('now') FROM items i
+       JOIN feeds f ON f.id = i.feedId
+       LEFT JOIN read_state rs ON rs.itemId = i.id
+       ${joins}
+       WHERE ${conditions.join(' AND ')}
+       ON CONFLICT(itemId) DO UPDATE SET isRead = 1, readAt = excluded.readAt`
+    ).run(...params).changes;
   },
 
   setReadableContent(itemId: number, readable: string | null) {

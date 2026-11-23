@@ -47,6 +47,8 @@ type Props = {
   onRefresh: () => void;
   onMarkAllRead: () => void;
   onMarkOlderRead: (days: number) => void;
+  onMarkSearchedRead: () => void;
+  markingSearchedRead: boolean;
   scopeLabel: string;
   condensed: boolean;
   isMobile: boolean;
@@ -82,6 +84,8 @@ export const HeaderBar: React.FC<Props> = ({
   onRefresh,
   onMarkAllRead,
   onMarkOlderRead,
+  onMarkSearchedRead,
+  markingSearchedRead,
   scopeLabel,
   condensed,
   isMobile,
@@ -337,6 +341,16 @@ export const HeaderBar: React.FC<Props> = ({
               <ListSubheader disableSticky sx={{ bgcolor: 'transparent', color: 'var(--muted)', lineHeight: '32px' }}>
                 Mark as read articles...
               </ListSubheader>
+              <MenuItem
+                disabled={!search.trim() || markingSearchedRead}
+                onClick={() => {
+                  onMarkSearchedRead();
+                  setMarkAnchor(null);
+                }}
+              >
+                Currently searched
+              </MenuItem>
+              <Divider />
               {markReadAgeOptions.map((option) => (
                 <MenuItem key={option.days} onClick={() => markOlder(option.days)}>
                   {option.label}

@@ -81,7 +81,30 @@ npm start
 
 ## Verification
 
-There is currently no dedicated test script. After code changes, run:
+Run the focused API regression tests:
+
+```bash
+npm test
+```
+
+This builds the server and starts its production entry point with a disposable SQLite database and a local RSS fixture. It covers full-text search and refresh summaries for mixed results, all failures, all successes, empty feed lists, and disabled feeds. No external feeds or account credentials are used.
+
+It also checks concurrent refresh coalescing, the browser revalidation timer's visibility/network behavior, and the service worker's API cache exclusion.
+
+The open reader checks server data every 30 seconds while visible and online, and catches up on focus, visibility return, network reconnection, and back/forward restoration. These checks use GET requests that revalidate HTTP cache entries; upstream RSS fetching stays on the server's configured schedule. Manual Refresh still fetches feeds immediately. While an article is open or the reader is scrolled down, changes to the story list wait behind a "Show new stories" button so the reading position stays stable. API responses are never stored or served by the service worker.
+
+With Python Playwright and Chromium installed, run the production browser regression after building:
+
+```bash
+python3 tests/browser-refresh.py
+python3 tests/browser-searched-read.py
+```
+
+It uses an accelerated local server schedule and the browser clock to check changing feeds, visibility catch-up, filters, reading position, stale responses, and the active service worker. It finds Chromium on PATH, or accepts `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
+
+The searched-read browser regression checks the "Currently searched" dropdown option, including initial/cleared/whitespace disabled states, active feed/folder/Saved scope, non-matches, and changed queries with delayed results. The API regressions also cover over 1000 matches, FTS, tags, muted feeds, and server-side empty-search protection.
+
+After code changes, also run the full production build:
 
 ```bash
 npm run build
@@ -125,7 +148,6 @@ On May 18, 2026, `npm audit --audit-level=moderate` reported 11 vulnerabilities,
 
 ## Known Gaps
 
-- No automated test suite is currently configured.
 - `README.md` has duplicate refresh cadence bullets with different defaults.
 - The client sends `folderId` when adding a feed, but the current `POST /api/feeds` route ignores it.
 - The settings table has a UI setting named `contentFetchEnabled`, but server-side article fetching is controlled by the environment variable `CONTENT_FETCH_ENABLED`.

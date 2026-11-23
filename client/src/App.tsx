@@ -5,6 +5,7 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import { api } from './api';
 import { FeedWithUnread, Folder, Item, Settings, Tag, UserProfile } from '@shared/types';
 import { usePersistedState } from './hooks/usePersistedState';
+import { useAutoRevalidate } from './hooks/useAutoRevalidate';
 import { Sidebar } from './components/Sidebar';
 import { HeaderBar } from './components/HeaderBar';
 import { ItemList } from './components/ItemList';
@@ -20,6 +21,10 @@ import { AuthPage } from './components/AuthPage';
 import { kunaiLayout } from './theme';
 
 type FolderWithUnread = Folder & { unreadCount: number };
+
+const filterSavedItems = (items: Item[], unreadOnly: boolean, search: string) => items.filter((item) =>
+  item.saved && (!unreadOnly || !item.isRead) && (!search || item.title.toLowerCase().includes(search.toLowerCase()))
+);
 
 const EMPTY_QUOTES = [
   "📜 All scrolls read.",
@@ -82,7 +87,11 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
   const [deletingFolder, setDeletingFolder] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
+  const [refreshWarning, setRefreshWarning] = useState<string | null>(null);
+  const refreshInFlight = useRef(false);
+  const searchedReadInFlight = useRef(false);
+  const [markingSearchedRead, setMarkingSearchedRead] = useState(false);
+  const [pendingItems, setPendingItems] = useState<{ key: string; items: Item[] } | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [appliedDefaults, setAppliedDefaults] = useState(false);
   const [contentLoadingId, setContentLoadingId] = useState<number | null>(null);
@@ -90,14 +99,33 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [emptyQuote, setEmptyQuote] = useState('');
   const latestRequestId = useRef(0);
+  const itemsRequest = useRef<AbortController | null>(null);
+  const itemWrites = useRef(0);
+  const queryKey = JSON.stringify([search, searchMode, selectedFeedId, selectedFolderId, sort, unreadFirst, unreadOnly, selectedTagIds, mutedIncluded, savedView]);
+  const currentQueryKey = useRef(queryKey);
+  currentQueryKey.current = queryKey;
+  const reading = useRef(false);
+  reading.current = expandedId !== null || modalItem !== null;
+
+  const beginItemWrite = () => {
+    itemWrites.current++;
+    latestRequestId.current++;
+    itemsRequest.current?.abort();
+    setLoading(false);
+  };
 
   const displayItems = useMemo(() => {
     if (!savedView) return items;
-    let list = [...savedItems];
-    if (unreadOnly) list = list.filter((it) => !it.isRead);
-    if (search) list = list.filter((it) => it.title.toLowerCase().includes(search.toLowerCase()));
-    return list;
+    return filterSavedItems(savedItems, unreadOnly, search);
   }, [savedView, items, savedItems, unreadOnly, search]);
+
+  const currentDisplayedItems = useRef(displayItems);
+  currentDisplayedItems.current = displayItems;
+  const newStoryCount = useMemo(() => {
+    const existing = new Set(displayItems.map((item) => item.id));
+    const next = savedView ? filterSavedItems(pendingItems?.items || [], unreadOnly, search) : pendingItems?.items || [];
+    return next.filter((item) => !existing.has(item.id)).length;
+  }, [pendingItems, displayItems, savedView, unreadOnly, search]);
 
   const savedIds = useMemo(() => new Set(savedItems.map((i) => i.id)), [savedItems]);
 
@@ -143,23 +171,23 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const loadFeeds = useCallback(async () => {
+  const loadFeeds = useCallback(async (quiet = false) => {
     try {
       const data = await api.getFeeds();
-      const enabledFeeds = data.filter((f) => f.enabled !== false);
+      const enabledFeeds = data.filter((f) => Boolean(f.enabled));
       setFeeds(enabledFeeds);
       setSelectedFeedId((prev) => (prev && !enabledFeeds.find((f) => f.id === prev) ? null : prev));
     } catch (err: any) {
-      setError(err?.message || 'Failed to load feeds');
+      if (!quiet) setError(err?.message || 'Failed to load feeds');
     }
   }, []);
 
-  const loadFolders = useCallback(async () => {
+  const loadFolders = useCallback(async (quiet = false) => {
     try {
       const data = await api.getFolders();
       setFolders(data);
     } catch (err: any) {
-      setError(err?.message || 'Failed to load folders');
+      if (!quiet) setError(err?.message || 'Failed to load folders');
     }
   }, []);
 
@@ -242,10 +270,19 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
   }, [settings]);
 
   const fetchItems = useCallback(
-    async (opts?: { tagIds?: number[] }) => {
+    async (opts?: { tagIds?: number[]; background?: boolean }) => {
+      const background = opts?.background === true;
+      if (queryKey !== currentQueryKey.current) return;
+      if (background && (itemsRequest.current || itemWrites.current > 0)) return;
       const requestId = ++latestRequestId.current;
-      setLoading(true);
-      setError(null);
+      itemsRequest.current?.abort();
+      const controller = new AbortController();
+      itemsRequest.current = controller;
+      if (!background) {
+        setLoading(true);
+        setError(null);
+        setPendingItems(null);
+      }
       try {
         const params = new URLSearchParams();
         const scope = selectedFeedId ? 'feed' : selectedFolderId ? 'folder' : 'newsfeed';
@@ -253,6 +290,7 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
         if (selectedFeedId) params.set('feedId', String(selectedFeedId));
         if (selectedFolderId && !selectedFeedId) params.set('folderId', selectedFolderId);
         if (unreadOnly) params.set('unreadOnly', 'true');
+        if (savedView) params.set('savedOnly', 'true');
         if (search) params.set('search', search);
         if (searchMode) params.set('searchMode', searchMode);
         if (unreadFirst) params.set('unreadFirst', 'true');
@@ -263,24 +301,41 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
         params.set('sort', sort);
         params.set('limit', '1000');
 
-        const data = await api.getItems(params);
+        const data = await api.getItems(params, controller.signal);
         // Ignore stale responses
-        if (requestId === latestRequestId.current) {
-          setItems(data.items);
-          setSavedItems(data.items.filter((it) => it.saved));
+        if (requestId === latestRequestId.current && queryKey === currentQueryKey.current && itemWrites.current === 0) {
+          const visibleItems = savedView ? filterSavedItems(data.items, unreadOnly, search) : data.items;
+          const changedOrder = visibleItems.map((item) => item.id).join(',') !== currentDisplayedItems.current.map((item) => item.id).join(',');
+          if (background && changedOrder && (reading.current || window.scrollY > 80)) {
+            setPendingItems({ key: queryKey, items: data.items });
+          } else {
+            setItems(data.items);
+            setSavedItems(data.items.filter((it) => it.saved));
+            setPendingItems(null);
+          }
         }
       } catch (err: any) {
-        if (requestId === latestRequestId.current) {
+        if (!background && !controller.signal.aborted && requestId === latestRequestId.current && queryKey === currentQueryKey.current) {
           setError(err?.message || 'Failed to load items');
         }
       } finally {
-        if (requestId === latestRequestId.current) {
+        if (itemsRequest.current === controller) itemsRequest.current = null;
+        if (!background && requestId === latestRequestId.current) {
           setLoading(false);
         }
       }
     },
-    [search, searchMode, selectedFeedId, selectedFolderId, sort, unreadFirst, unreadOnly, selectedTagIds, mutedIncluded]
+    [queryKey, search, searchMode, selectedFeedId, selectedFolderId, sort, unreadFirst, unreadOnly, selectedTagIds, mutedIncluded, savedView]
   );
+
+  const latestFetchItems = useRef(fetchItems);
+  latestFetchItems.current = fetchItems;
+
+  useEffect(() => () => { itemsRequest.current?.abort(); }, []);
+
+  useAutoRevalidate(async () => {
+    await Promise.all([loadFeeds(true), loadFolders(true), latestFetchItems.current({ background: true })]);
+  }, !settingsView);
 
   useEffect(() => {
     loadSettings();
@@ -303,6 +358,7 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
   }, [selectedFeedId, selectedFolderId, unreadOnly, sort, search, searchMode, unreadFirst, selectedTagIds, mutedIncluded, fetchItems, settingsView]);
 
   const handleToggleRead = async (item: Item, next: boolean) => {
+    beginItemWrite();
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, isRead: next } : it)));
     setModalItem((prev) => (prev && prev.id === item.id ? { ...prev, isRead: next } : prev));
     setSavedItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, isRead: next } : it)));
@@ -313,10 +369,13 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
     } catch (err) {
       setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, isRead: !next } : it)));
       setSavedItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, isRead: !next } : it)));
+    } finally {
+      itemWrites.current--;
     }
   };
 
   const handleToggleSaved = (item: Item) => {
+    beginItemWrite();
     const next = !item.saved;
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, saved: next } : it)));
     setSavedItems((prev) => {
@@ -334,7 +393,7 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
         return prev.filter((p) => p.id !== item.id);
       });
       setError('Failed to update saved state');
-    });
+    }).finally(() => { itemWrites.current--; });
   };
 
   const handleMarkAll = async () => {
@@ -351,6 +410,37 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
       await handleRefresh();
     } catch (err: any) {
       setError(err?.message || 'Failed to mark all read');
+    }
+  };
+
+  const handleMarkSearchedRead = async () => {
+    if (!search.trim() || searchedReadInFlight.current) return;
+    searchedReadInFlight.current = true;
+    setMarkingSearchedRead(true);
+    beginItemWrite();
+    let completed = false;
+    try {
+      await api.markSearchedRead({
+        scope: selectedFeedId ? 'feed' : selectedFolderId ? 'folder' : 'newsfeed',
+        feedId: selectedFeedId || undefined,
+        folderId: selectedFolderId || undefined,
+        search,
+        searchMode,
+        unreadOnly,
+        tagIds: selectedTagIds,
+        mutedIncluded,
+        savedOnly: savedView
+      });
+      completed = true;
+    } catch (err: any) {
+      setError(err?.message || 'Failed to mark searched articles read');
+    } finally {
+      itemWrites.current--;
+      searchedReadInFlight.current = false;
+      setMarkingSearchedRead(false);
+    }
+    if (completed) {
+      await Promise.all([loadFeeds(), loadFolders(), latestFetchItems.current()]);
     }
   };
 
@@ -389,26 +479,28 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
   };
 
   const handleRefresh = useCallback(async () => {
-    if (refreshing) return;
-    setRefreshing(true);
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    setRefreshWarning(null);
     try {
       if (selectedFeedId) await api.refreshFeed(selectedFeedId);
-      else await api.refreshAll();
+      else {
+        const result = await api.refreshAll();
+        if (!result.ok) {
+          const names = result.failures.map((failure) => failure.title).join(', ');
+          setRefreshWarning(
+            `${result.refreshed} feed${result.refreshed === 1 ? '' : 's'} refreshed. Failed to refresh ${result.failed}: ${names}.`
+          );
+        }
+      }
       await Promise.all([loadFeeds(), loadFolders()]);
-      fetchItems();
+      await latestFetchItems.current();
     } catch (err: any) {
       setError(err?.message || 'Refresh failed');
     } finally {
-      setRefreshing(false);
+      refreshInFlight.current = false;
     }
-  }, [selectedFeedId, loadFeeds, loadFolders, fetchItems, refreshing]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (!document.hidden) handleRefresh();
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [handleRefresh]);
+  }, [selectedFeedId, loadFeeds, loadFolders]);
 
   const handleAddFeed = async (url: string, title?: string) => {
     await api.addFeed({ url, title, folderId: selectedFolderId || undefined });
@@ -439,6 +531,7 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
   };
 
   const handleUpdateTags = async (item: Item, add?: (number | string)[], remove?: (number | string)[]) => {
+    beginItemWrite();
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, tags: patchTags(it.tags, add, remove) } : it)));
     setModalItem((prev) => (prev && prev.id === item.id ? { ...prev, tags: patchTags(prev.tags, add, remove) } : prev));
     setSavedItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, tags: patchTags(it.tags, add, remove) } : it)));
@@ -448,10 +541,13 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
     } catch (err: any) {
       setError(err?.message || 'Failed to update tags');
       fetchItems();
+    } finally {
+      itemWrites.current--;
     }
   };
 
   const handleFetchContent = async (item: Item) => {
+    beginItemWrite();
     setContentLoadingId(item.id);
     try {
       const res = await api.fetchReadableContent(item.id);
@@ -460,6 +556,7 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
     } catch (err: any) {
       setError(err?.message || 'Failed to fetch content');
     } finally {
+      itemWrites.current--;
       setContentLoadingId(null);
     }
   };
@@ -746,6 +843,8 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
             onRefresh={handleRefresh}
             onMarkAllRead={handleMarkAll}
             onMarkOlderRead={handleMarkOlderRead}
+            onMarkSearchedRead={handleMarkSearchedRead}
+            markingSearchedRead={markingSearchedRead}
             scopeLabel={scopeLabel(selectedFeed, selectedFolderId, folders, savedView)}
             condensed
             isMobile={isMobile}
@@ -796,6 +895,27 @@ const ReaderApp: React.FC<{ user: UserProfile; onUserChange: (user: UserProfile)
                   </Button>
                 )}
               </Stack>
+            )}
+
+            {refreshWarning && (
+              <Alert severity="warning" variant="outlined" onClose={() => setRefreshWarning(null)}>
+                {refreshWarning}
+              </Alert>
+            )}
+
+            {pendingItems && pendingItems.key === queryKey && (
+              <Button
+                variant="contained"
+                sx={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 1100 }}
+                onClick={() => {
+                  setExpandedId(null);
+                  setPendingItems(null);
+                  latestFetchItems.current();
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+              >
+                {newStoryCount > 0 ? `Show ${newStoryCount} new ${newStoryCount === 1 ? 'story' : 'stories'}` : 'Show updated stories'}
+              </Button>
             )}
 
             {error && (

@@ -128,7 +128,21 @@ Refreshes a single feed. Returns `{ "ok": true }` or `404` if the feed does not 
 
 ### `POST /api/refresh`
 
-Refreshes all feeds. Returns `{ "ok": true }`.
+Refreshes enabled feeds, continuing if an individual feed fails. Returns HTTP `200` with a summary:
+
+```json
+{
+  "ok": false,
+  "refreshed": 2,
+  "failed": 1,
+  "skipped": 1,
+  "failures": [
+    { "feedId": 3, "title": "Example", "message": "Status code 503" }
+  ]
+}
+```
+
+`ok` is true only when no feed failed. `refreshed` counts successful feeds; `skipped` counts disabled feeds. An all-success or empty refresh returns an empty `failures` array. Clients must inspect `ok`, not just the HTTP status. Unexpected errors outside an individual feed refresh return HTTP `500`.
 
 ## Items
 
@@ -148,6 +162,7 @@ Query parameters:
 - `cursor`: pagination cursor returned by the previous response
 - `tagIds`: comma-separated tag IDs
 - `mutedIncluded`: `true` to include muted feeds
+- `savedOnly`: `true` to return only saved articles, using the Saved view's literal title search
 
 Review note: the route enforces `feedId` for `scope=feed`, but it does not currently enforce `folderId` for `scope=folder`. A folder-scoped query without `folderId` can therefore fall through to a broader query than intended.
 
@@ -184,6 +199,25 @@ Body:
 ```
 
 `feedId` is required for feed scope. `folderId` is required for folder scope. Returns `{ "ok": true }`.
+
+### `POST /api/items/markSearchedRead`
+
+Marks every unread article matching the current search and scope, including matches beyond the list endpoint's page limit. It uses the same predicates as `GET /api/items`.
+
+```json
+{
+  "scope": "feed",
+  "feedId": 1,
+  "search": "astronomy",
+  "searchMode": "basic",
+  "unreadOnly": false,
+  "tagIds": [],
+  "mutedIncluded": false,
+  "savedOnly": false
+}
+```
+
+The search must contain a non-whitespace character. Feed and folder scopes require their respective IDs. Optional filters are `searchMode`, `unreadOnly`, `tagIds`, `mutedIncluded`, and `savedOnly`. Empty searches, missing scope IDs, and invalid FTS queries return HTTP `400` without changing read state. Returns `{ "ok": true, "marked": 12 }`, where `marked` counts newly read articles. With zero matches it returns `marked: 0`.
 
 ### `POST /api/items/:id/save`
 

@@ -27,6 +27,14 @@ export type FeedWithUnread = Feed & { unreadCount: number };
 export type FeedCreateRequest = { url: string; title?: string; folderId?: string | null };
 export type FeedUpdateRequest = Partial<Pick<Feed, 'title' | 'url' | 'enabled' | 'folderId' | 'muted'>>;
 
+export type RefreshAllResponse = {
+  ok: boolean;
+  refreshed: number;
+  failed: number;
+  skipped: number;
+  failures: Array<{ feedId: number; title: string; message: string }>;
+};
+
 export type Tag = {
   id: number;
   name: string;
@@ -70,6 +78,7 @@ export type ItemQuery = {
   cursor?: string | null;
   tagIds?: number[];
   mutedIncluded?: boolean;
+  savedOnly?: boolean;
 };
 
 export type ItemListResponse = {
@@ -84,6 +93,9 @@ export type MarkAllReadRequest = {
   folderId?: string | null;
   beforePublishedAt?: string | null;
 };
+
+export type MarkSearchedReadRequest = Omit<ItemQuery, 'search' | 'sort' | 'unreadFirst' | 'limit' | 'cursor'> & { search: string };
+export type MarkSearchedReadResponse = { ok: true; marked: number };
 
 export type Settings = Partial<{
   markReadOnOpen: boolean;

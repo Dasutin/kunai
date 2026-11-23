@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kunai-static-v2';
+const CACHE_NAME = 'kunai-static-v3';
 const OFFLINE_URLS = [
   '/manifest.webmanifest',
   '/favicon.png',
@@ -24,6 +24,9 @@ self.addEventListener('fetch', (event) => {
 
   const { request } = event;
   const url = new URL(request.url);
+
+  // Reader data and sessions must come from the server, including on network failure.
+  if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return;
 
   // Only cache same-origin requests; prefer network-first for HTML to avoid staleness
   if (request.mode === 'navigate') {

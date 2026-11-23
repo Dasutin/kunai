@@ -258,7 +258,7 @@ app.post('/api/feeds/:id/refresh', async (req, res) => {
 
 app.post('/api/refresh', async (_req, res) => {
   refreshAllFeeds()
-    .then(() => res.json({ ok: true }))
+    .then((result) => res.json(result))
     .catch((err) => res.status(500).json({ message: err?.message || 'Failed to refresh' }));
 });
 
@@ -274,7 +274,8 @@ app.get('/api/items', (req, res) => {
     unreadFirst: req.query.unreadFirst === 'true',
     limit: parseNumber(req.query.limit),
     cursor: (req.query.cursor as string) || null,
-    mutedIncluded: req.query.mutedIncluded === 'true'
+    mutedIncluded: req.query.mutedIncluded === 'true',
+    savedOnly: req.query.savedOnly === 'true'
   };
   if (req.query.tagIds) {
     const tags = String(req.query.tagIds)
@@ -297,6 +298,30 @@ app.post('/api/items/:id/read', (req, res) => {
   if (!parsed.success) return res.status(400).json({ message: 'Invalid payload', details: parsed.error.flatten() });
   itemsRepo.markRead(id, parsed.data.isRead);
   res.json({ ok: true });
+});
+
+app.post('/api/items/markSearchedRead', (req, res) => {
+  const schema = z.object({
+    scope: z.enum(['newsfeed', 'feed', 'folder']),
+    feedId: z.number().int().positive().optional(),
+    folderId: z.string().uuid().nullable().optional(),
+    search: z.string().max(2000).refine((value) => value.trim().length > 0, 'A search is required'),
+    searchMode: z.enum(['basic', 'fts']).optional(),
+    unreadOnly: z.boolean().optional(),
+    mutedIncluded: z.boolean().optional(),
+    savedOnly: z.boolean().optional(),
+    tagIds: z.array(z.number().int().positive()).optional()
+  }).refine((value) => value.scope !== 'feed' || value.feedId !== undefined, 'feedId required when scope=feed')
+    .refine((value) => value.scope !== 'folder' || !!value.folderId, 'folderId required when scope=folder');
+  const parsed = schema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ message: 'A valid search and scope are required.', details: parsed.error.flatten() });
+  try {
+    const marked = itemsRepo.markSearchedRead(parsed.data);
+    res.json({ ok: true, marked });
+  } catch (err: any) {
+    if (err?.code === 'SQLITE_ERROR') return res.status(400).json({ message: 'Unable to mark searched articles. Check your search query.' });
+    throw err;
+  }
 });
 
 app.post('/api/items/markAllRead', (req, res) => {

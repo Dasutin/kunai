@@ -4,11 +4,14 @@ import {
   FeedUpdateRequest,
   ItemListResponse,
   MarkAllReadRequest,
+  MarkSearchedReadRequest,
+  MarkSearchedReadResponse,
   MarkReadRequest,
   Tag,
   Settings,
   Folder,
-  UserProfile
+  UserProfile,
+  RefreshAllResponse
 } from '@shared/types';
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
@@ -75,7 +78,7 @@ export const api = {
     return handle<{ ok: true }>(res);
   },
   async getFeeds(): Promise<FeedWithUnread[]> {
-    const res = await fetch('/api/feeds');
+    const res = await fetch('/api/feeds', { cache: 'no-cache' });
     return handle(res);
   },
   async addFeed(body: FeedCreateRequest) {
@@ -102,12 +105,12 @@ export const api = {
     const res = await fetch(`/api/feeds/${id}/refresh`, { method: 'POST' });
     return handle(res);
   },
-  async refreshAll() {
+  async refreshAll(): Promise<RefreshAllResponse> {
     const res = await fetch('/api/refresh', { method: 'POST' });
-    return handle(res);
+    return handle<RefreshAllResponse>(res);
   },
-  async getItems(params: URLSearchParams): Promise<ItemListResponse> {
-    const res = await fetch(`/api/items?${params.toString()}`);
+  async getItems(params: URLSearchParams, signal?: AbortSignal): Promise<ItemListResponse> {
+    const res = await fetch(`/api/items?${params.toString()}`, { signal, cache: 'no-cache' });
     return handle(res);
   },
   async markRead(id: number, body: MarkReadRequest) {
@@ -117,6 +120,10 @@ export const api = {
   async markAllRead(body: MarkAllReadRequest) {
     const res = await fetch('/api/items/markAllRead', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(body) });
     return handle(res);
+  },
+  async markSearchedRead(body: MarkSearchedReadRequest): Promise<MarkSearchedReadResponse> {
+    const res = await fetch('/api/items/markSearchedRead', { method: 'POST', headers: jsonHeaders, body: JSON.stringify(body) });
+    return handle<MarkSearchedReadResponse>(res);
   },
   async saveItem(id: number, body: { saved: boolean }) {
     const res = await fetch(`/api/items/${id}/save`, { method: 'POST', headers: jsonHeaders, body: JSON.stringify(body) });
@@ -164,7 +171,7 @@ export const api = {
     return res.blob();
   },
   async getFolders(): Promise<Array<Folder & { unreadCount: number }>> {
-    const res = await fetch('/api/folders');
+    const res = await fetch('/api/folders', { cache: 'no-cache' });
     return handle(res);
   },
   async createFolder(name: string, parentId?: string | null) {
