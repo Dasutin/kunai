@@ -95,3 +95,20 @@ body {
   border: none;
   border-radius: 12px;
 }
+
+.summary-loading {
+  padding: 22px;
+  border-radius: 12px;
+  border: 1px solid var(--card-border);
+  background: linear-gradient(125deg, rgba(56, 189, 248, 0.07), rgba(167, 139, 250, 0.1), transparent);
+  animation: summary-glow 1.8s ease-in-out infinite alternate;
+}
+
+.ai-summary { animation: summary-reveal 0.25s ease-out; }
+@keyframes summary-glow { to { box-shadow: inset 0 0 24px rgba(56, 189, 248, 0.08); } }
+@keyframes summary-reveal { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .summary-loading, .summary-loading .MuiSkeleton-root, .summary-loading .MuiSkeleton-root::after,
+  .summary-spinner, .summary-spinner .MuiCircularProgress-circle, .ai-summary { animation: none !important; }
+}

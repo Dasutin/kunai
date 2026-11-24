@@ -48,6 +48,18 @@ http://localhost:3000
 | `CONTENT_FETCH_ENABLED` | `true` when unset | Enables or disables server-side readable article fetching. Set to `false` to disable. |
 | `CONTENT_FETCH_MAX_PER_REFRESH` | `3` | Configured maximum for content fetch behavior. |
 | `MAX_UPLOAD_MB` | `5` | Body size limit for OPML/text uploads. |
+| `OPENAI_API_KEY` | empty | Runtime server-only key for explicitly requested article summaries. Without it, normal reading works and summary requests return a configuration message. |
+| `OPENAI_SUMMARY_MODEL` | `gpt-5.4-mini` | OpenAI Responses API model used for summaries. |
+
+## Optional AI Summaries
+
+Set `OPENAI_API_KEY` in the container's runtime environment. Docker Compose passes it from your local shell or ignored `.env` file; `.env.example` contains an empty placeholder. On Unraid, add a container environment variable named `OPENAI_API_KEY` and enter the value locally. No key belongs in the Dockerfile, build arguments, client code, a `VITE_` variable, or Git.
+
+Each article has an **AI summary** button. It replaces the article body with a summary and uses an animated loading panel while waiting; **Original story** restores the original body. Clicking Original story during generation immediately restores the article. Summaries are reused when toggling, including across reader layouts, and normal reading/background refresh never requests AI.
+
+Only stored article text is sent on an explicit click: readable article content when available, otherwise feed content or a snippet. The reader labels summaries of available feed text and truncated excerpts. Requests contain plain text, have no tools, disable Responses API storage, cap input at 40,000 text characters and output at 700 tokens, and time out after 30 seconds. Model output is rendered as text, never HTML. The key is used only in the server's authorization header.
+
+The server coalesces duplicate requests, permits up to three new generations at once, and keeps at most 100 content-aware summaries in memory for one hour. Restarting the server clears that cache. Article text, read/save state, and tags are not overwritten by the summary endpoint. Failed generations are not cached and can be retried explicitly.
 
 ## Persistence
 

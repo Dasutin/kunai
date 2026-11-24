@@ -87,6 +87,11 @@ export type ItemListResponse = {
 };
 
 export type MarkReadRequest = { isRead: boolean };
+export type ArticleSummary = {
+  summary: string;
+  source: 'article' | 'feed' | 'snippet';
+  truncated: boolean;
+};
 export type MarkAllReadRequest = {
   scope: 'newsfeed' | 'feed' | 'folder';
   feedId?: number;

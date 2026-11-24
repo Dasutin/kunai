@@ -6,6 +6,7 @@ import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import { Item, Tag } from '@shared/types';
 import { kunaiLayout } from '../theme';
+import { ArticleBody, SummaryButton } from './ArticleSummary';
 
 const timeAgo = (iso: string | null) => {
   if (!iso) return 'unknown';
@@ -64,11 +65,11 @@ export const ItemList: React.FC<Props> = ({ items, expandedId, onExpand, onToggl
                 display: 'grid',
                 gridTemplateColumns: {
                   xs: 'minmax(0, 1fr) auto',
-                  sm: 'auto auto minmax(110px, 150px) minmax(0, 1fr) auto'
+                  sm: 'auto auto auto minmax(110px, 150px) minmax(0, 1fr) auto'
                 },
                 gridTemplateAreas: {
-                  xs: '"feed time" "title title"',
-                  sm: '"read save feed title time"'
+                  xs: '"feed time" "title summary"',
+                  sm: '"read save summary feed title time"'
                 },
                 alignItems: 'center',
                 gap: { xs: 0.75, sm: 1.25 }
@@ -96,6 +97,9 @@ export const ItemList: React.FC<Props> = ({ items, expandedId, onExpand, onToggl
               >
                 {savedIcon(saved)}
               </IconButton>
+              <Box sx={{ gridArea: 'summary' }}>
+                <SummaryButton item={item} onShow={() => { if (!expanded) onExpand(item.id); }} />
+              </Box>
               <Typography variant="body2" color="var(--muted)" noWrap title={item.feedTitle || ''} sx={{ gridArea: 'feed' }}>
                 {item.feedTitle}
               </Typography>
@@ -168,13 +172,7 @@ export const ItemList: React.FC<Props> = ({ items, expandedId, onExpand, onToggl
                   />
                 )}
                 <Box sx={{ flex: 1, minWidth: 280, maxWidth: kunaiLayout.modalContentWidth, overflowWrap: 'break-word' }}>
-                  {item.readableContent ? (
-                    <Box className="article-body" dangerouslySetInnerHTML={{ __html: item.readableContent }} />
-                  ) : item.content ? (
-                    <Box className="article-body" dangerouslySetInnerHTML={{ __html: item.content }} />
-                  ) : (
-                    <Typography color="var(--muted)">{item.snippet || 'No snippet available.'}</Typography>
-                  )}
+                  <ArticleBody item={item} />
                   {item.tags && item.tags.length > 0 && (
                     <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 1 }}>
                       {item.tags.map((tag) => (

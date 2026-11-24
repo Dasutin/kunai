@@ -25,8 +25,10 @@ import { settingsRepo } from './db/settings.js';
 import { parseOpml, buildOpml } from './opml.js';
 import { fetchReadable } from './content/fetcher.js';
 import { usersRepo } from './db/users.js';
+import { createArticleSummarizer, SummaryError } from './ai/summary.js';
 
 applyMigrations(db);
+const summarizeArticle = createArticleSummarizer({ apiKey: env.openaiApiKey, model: env.openaiSummaryModel });
 
 const app = express();
 app.use(cors());
@@ -409,6 +411,20 @@ app.post('/api/items/:id/save', (req, res) => {
   if (!existing) return res.status(404).json({ message: 'Item not found' });
   itemsRepo.setSaved(id, parsed.data.saved);
   res.json({ ok: true });
+});
+
+app.post('/api/items/:id/summary', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const parsed = z.coerce.number().int().positive().max(Number.MAX_SAFE_INTEGER).safeParse(req.params.id);
+  if (!parsed.success) return res.status(400).json({ message: 'Invalid article ID.' });
+  const item = itemsRepo.findForSummary(parsed.data);
+  if (!item) return res.status(404).json({ message: 'Article not found.' });
+  try {
+    res.json(await summarizeArticle(item));
+  } catch (error) {
+    const status = error instanceof SummaryError ? error.status : 500;
+    res.status(status).json({ message: error instanceof SummaryError ? error.message : 'Unable to summarize this article.' });
+  }
 });
 
 // Content fetch

@@ -98,11 +98,14 @@ With Python Playwright and Chromium installed, run the production browser regres
 ```bash
 python3 tests/browser-refresh.py
 python3 tests/browser-searched-read.py
+python3 tests/browser-summary.py
 ```
 
 It uses an accelerated local server schedule and the browser clock to check changing feeds, visibility catch-up, filters, reading position, stale responses, and the active service worker. It finds Chromium on PATH, or accepts `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
 
 The searched-read browser regression checks the "Currently searched" dropdown option, including initial/cleared/whitespace disabled states, active feed/folder/Saved scope, non-matches, and changed queries with delayed results. The API regressions also cover over 1000 matches, FTS, tags, muted feeds, and server-side empty-search protection.
+
+Summary tests use a fake runtime key and a local provider fixture, with outbound OpenAI requests intercepted only by the test process. No real API key or paid call is needed. They check explicit-click-only generation, text-only requests, missing configuration, input bounds, safe provider errors, timeout, concurrency/cache behavior, the shimmer/reduced-motion state, original restoration, and all article layouts. Live provider quality and account/model access require separate verification with a locally configured key.
 
 After code changes, also run the full production build:
 

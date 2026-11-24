@@ -19,6 +19,7 @@ import { CreateFolderModal } from './components/CreateFolderModal';
 import { DeleteFolderModal } from './components/DeleteFolderModal';
 import { AuthPage } from './components/AuthPage';
 import { kunaiLayout } from './theme';
+import { ArticleSummaryProvider } from './components/ArticleSummary';
 
 type FolderWithUnread = Folder & { unreadCount: number };
 
@@ -1091,7 +1092,7 @@ const App: React.FC = () => {
 
   if (!user) return <AuthPage onAuthenticated={setUser} />;
 
-  return <ReaderApp user={user} onUserChange={setUser} onSignOut={signOut} />;
+  return <ArticleSummaryProvider key={user.id}><ReaderApp user={user} onUserChange={setUser} onSignOut={signOut} /></ArticleSummaryProvider>;
 };
 
 export default App;

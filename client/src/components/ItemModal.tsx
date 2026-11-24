@@ -24,6 +24,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import SellIcon from '@mui/icons-material/Sell';
 import { Item, Tag } from '@shared/types';
 import { kunaiLayout, kunaiScrollbarSx } from '../theme';
+import { ArticleBody, SummaryButton } from './ArticleSummary';
 
 type Props = {
   item: Item;
@@ -104,6 +105,7 @@ export const ItemModal: React.FC<Props> = ({
           }}
         >
           <Stack direction="row" alignItems="center" spacing={1}>
+            <SummaryButton item={item} />
             <Tooltip title={item.isRead ? 'Mark unread' : 'Mark read'}>
               <IconButton aria-label={item.isRead ? 'Mark unread' : 'Mark read'} onClick={() => onToggleRead(item, !item.isRead)}>
                 {item.isRead ? <RadioButtonUncheckedIcon /> : <RadioButtonCheckedIcon />}
@@ -193,13 +195,7 @@ export const ItemModal: React.FC<Props> = ({
             {!item.readableContent && item.imageUrl && (
               <Box component="img" src={item.imageUrl} alt="" sx={{ width: '100%', height: 'auto', borderRadius: 2, objectFit: 'cover' }} />
             )}
-            {item.readableContent ? (
-              <Box className="article-body" dangerouslySetInnerHTML={{ __html: item.readableContent }} />
-            ) : item.content ? (
-              <Box className="article-body" dangerouslySetInnerHTML={{ __html: item.content }} />
-            ) : (
-              <Typography color="var(--muted)">{item.snippet || 'No snippet available.'}</Typography>
-            )}
+            <ArticleBody item={item} />
             {item.tags && item.tags.length > 0 && (
               <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap">
                 {item.tags.map((tag) => (

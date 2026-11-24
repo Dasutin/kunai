@@ -4,6 +4,7 @@ import type {
   FeedUpdateRequest,
   ItemListResponse,
   ItemQuery,
+  Item,
   MarkSearchedReadRequest,
   Tag
 } from '../../../shared/types.js';
@@ -254,6 +255,11 @@ const applyCursor = (
 };
 
 export const itemsRepo = {
+  findForSummary(id: number) {
+    return db.prepare('SELECT id, title, readableContent, content, snippet FROM items WHERE id = ?').get(id) as
+      Pick<Item, 'id' | 'title' | 'readableContent' | 'content' | 'snippet'> | undefined;
+  },
+
   upsertItems(feedId: number, items: NormalizedItem[]) {
     const toText = (val: any | null | undefined, fallback: string | null = null) => {
       if (val === null || val === undefined) return fallback;

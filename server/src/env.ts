@@ -19,5 +19,7 @@ export const env = {
   // Default on; only disable if explicitly set to "false"
   contentFetchEnabled: contentFetchFlag === undefined ? true : contentFetchFlag === 'true',
   contentFetchMaxPerRefresh: numberFromEnv(process.env.CONTENT_FETCH_MAX_PER_REFRESH, 3),
-  maxUploadMb: numberFromEnv(process.env.MAX_UPLOAD_MB, 5)
+  maxUploadMb: numberFromEnv(process.env.MAX_UPLOAD_MB, 5),
+  openaiApiKey: process.env.OPENAI_API_KEY?.trim() || '',
+  openaiSummaryModel: process.env.OPENAI_SUMMARY_MODEL?.trim() || 'gpt-5.4-mini'
 };

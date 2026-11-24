@@ -5,6 +5,7 @@ import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
 import { Item } from '@shared/types';
+import { SummaryButton } from './ArticleSummary';
 
 const timeAgo = (iso: string | null) => {
   if (!iso) return 'unknown';
@@ -123,6 +124,7 @@ export const ItemMagazine: React.FC<Props> = ({ items, onOpen, onToggleRead, sav
                   {timeAgo(item.publishedAt)}
                 </Typography>
               </Stack>
+              <SummaryButton item={item} onShow={() => onOpen(item)} />
               <Stack direction="row" spacing={0.5} sx={{ display: { xs: 'none', sm: 'flex' }, ml: 'auto', justifyContent: 'flex-end', flexShrink: 0 }}>
                 <IconButton
                   aria-label={saved ? 'Remove from saved' : 'Save article'}

@@ -11,7 +11,8 @@ import {
   Settings,
   Folder,
   UserProfile,
-  RefreshAllResponse
+  RefreshAllResponse,
+  ArticleSummary
 } from '@shared/types';
 
 const jsonHeaders = { 'Content-Type': 'application/json' };
@@ -136,6 +137,10 @@ export const api = {
   async fetchReadableContent(id: number): Promise<{ ok: boolean; readableContent: string | null }> {
     const res = await fetch(`/api/items/${id}/fetchContent`, { method: 'POST' });
     return handle(res);
+  },
+  async summarizeItem(id: number, signal?: AbortSignal): Promise<ArticleSummary> {
+    const res = await fetch(`/api/items/${id}/summary`, { method: 'POST', signal, cache: 'no-store' });
+    return handle<ArticleSummary>(res);
   },
   async getTags(): Promise<Tag[]> {
     const res = await fetch('/api/tags');

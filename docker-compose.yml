@@ -8,6 +8,8 @@ services:
       - .env
     environment:
       - DATA_DIR=/data
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_SUMMARY_MODEL=${OPENAI_SUMMARY_MODEL:-gpt-5.4-mini}
     volumes:
       - data:/data
     restart: unless-stopped

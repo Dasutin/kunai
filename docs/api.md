@@ -259,6 +259,16 @@ If fetching fails, the endpoint returns a JSON response with `ok: false` and a m
 
 Security note: this endpoint performs outbound requests to item links and should be protected with URL policy and private-network restrictions before use on an untrusted network.
 
+### `POST /api/items/:id/summary`
+
+Requires a signed-in session and a server-side `OPENAI_API_KEY`. No request body is needed; article text comes from the stored item, never client-supplied text, URLs, prompts, or tools.
+
+```json
+{ "summary": "A short overview…\n• Key fact…", "source": "article", "truncated": false }
+```
+
+`source` is `article`, `feed`, or `snippet`. Original article data is unchanged. Returns `400` for an invalid ID, `404` for a missing item, `422` for empty text, `503` when unconfigured, `429` when busy/rate limited, `502` for provider failure or invalid output, and `504` for a timeout. Errors omit upstream response bodies and credentials. Success responses use `Cache-Control: no-store`; an in-memory server cache avoids duplicate generations for unchanged content.
+
 ## Tags
 
 ### `GET /api/tags`
